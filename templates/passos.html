@@ -82,15 +82,14 @@
 
         <!-- Abas: Lições Aprendidas -->
         <div class="tab-pane fade" id="passo-licoes" role="tabpanel" aria-labelledby="tab-licoes">
-          <h5 class="fw-semibold">Lições Aprendidas</h5>
 
           <label for="melhorias" class="form-label mt-3">Melhorias a implementar:</label>
           <textarea id="melhorias" class="form-control mb-3" rows="4"
-                    placeholder="Descreva as melhorias sugeridas..."></textarea>
+                    placeholder="Descreva as melhorias sugeridas..." required></textarea>
 
           <label for="observacoes" class="form-label">Observações Finais:</label>
           <textarea id="observacoes" class="form-control mb-3" rows="4"
-                    placeholder="Outras observações relevantes..."></textarea>
+                    placeholder="Outras observações relevantes..." required></textarea>
 
           <div class="d-flex justify-content-between mt-4">
             <button class="btn btn-secondary" onclick="voltarPasso('licoes')">Passo Anterior</button>
@@ -108,31 +107,33 @@
     console.log(`Ficheiro atualizado no passo ${indice}`);
   }
 
-  function avancarPasso(indiceAtual) {
-    const abaAtual = document.getElementById(`passo-${indiceAtual}`);
-    const textarea = abaAtual.querySelector('textarea');
-
+  async function avancarPasso(indiceAtual) {
+    const textarea = document.getElementById(`evidencia-${indiceAtual}`);
     if (!textarea.value.trim()) {
       alert('Por favor, preencha a evidência antes de continuar.');
       textarea.focus();
       return;
     }
 
-    fetch("/incident/salvar_passo", {
-      method: "POST",
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        passo: indiceAtual,
-        evidencia: textarea.value.trim()
-      })
-    });
+    try {
+      await fetch("/incident/salvar_passo", {
+        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          passo: indiceAtual,
+          evidencia: textarea.value.trim()
+        })
+      });
 
-    const abaAtualTab = document.getElementById(`tab-${indiceAtual}`);
-    abaAtualTab.classList.add('bg-success', 'text-white');
+      const abaAtualTab = document.getElementById(`tab-${indiceAtual}`);
+      abaAtualTab.classList.add('bg-success', 'text-white');
 
-    const proximoBotao = document.getElementById(`tab-${indiceAtual + 1}`);
-    if (proximoBotao) {
-      new bootstrap.Tab(proximoBotao).show();
+      const proximoBotao = document.getElementById(`tab-${indiceAtual + 1}`);
+      if (proximoBotao) {
+        new bootstrap.Tab(proximoBotao).show();
+      }
+    } catch (err) {
+      alert('Erro ao guardar o passo. Tente novamente.');
     }
   }
 
@@ -144,7 +145,9 @@
     }
 
     const tabLicoes = document.getElementById("tab-licoes");
-    new bootstrap.Tab(tabLicoes).show();
+    if (tabLicoes) {
+      new bootstrap.Tab(tabLicoes).show();
+    }
   }
 
   function voltarPasso(indiceAtual) {
@@ -176,6 +179,8 @@
       body: JSON.stringify({ melhorias, observacoes })
     }).then(() => {
       window.location.href = "/incident/finalizar";
+    }).catch(() => {
+      alert("Erro ao salvar as lições aprendidas.");
     });
   }
 
@@ -194,4 +199,6 @@
   });
 </script>
 {% endblock %}
+
+
 

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, abort, send_file, session
+from flask import Flask, render_template, request, redirect, url_for, abort, send_file, session, jsonify
 from datetime import datetime
 from fpdf import FPDF
 import os
@@ -6,9 +6,7 @@ import io
 import json
 
 app = Flask(__name__)
-
 app.secret_key = 'secret_key_1234'
-
 
 # Simulando uma base de dados simples
 UTILIZADORES = {
@@ -40,6 +38,7 @@ def login():
     data_atual = datetime.now().strftime('%d/%m/%Y')
 
     if username in UTILIZADORES and UTILIZADORES[username] == password:
+        session.clear()
         return redirect(url_for('incident'))
     else:
         return render_template('index.html', message="Utilizador ou senha inválidos.", data_atual=data_atual)
@@ -83,14 +82,11 @@ def incident():
         tipo=tipo_selecionado
     )
 
-
-
 @app.route('/incident/passos', methods=['GET', 'POST'])
 def passos():
-    session['inicio_registo'] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+    session['inicio_registo'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     passos_incidentes = carregar_passos_incidentes()
 
-    # Normalização da estrutura
     if isinstance(passos_incidentes, list) and len(passos_incidentes) == 1 and isinstance(passos_incidentes[0], list):
         passos_incidentes = passos_incidentes[0]
 
@@ -117,60 +113,52 @@ def passos():
     if not passos_encontrados:
         return abort(404, description="Plano de passos não encontrado para a classe e tipo informados.")
 
-    # Salvar temporariamente para reutilização no relatorio/finalizar
     session['classe'] = classe_req
     session['tipo'] = tipo_req
+    session['passos'] = passos_encontrados
 
     return render_template('passos.html', passos=passos_encontrados, classe=classe_req, tipo=tipo_req)
-
-
 
 @app.route('/incident/salvar_passo', methods=['POST'])
 def salvar_passo():
     dados = request.get_json()
-    passo_index = dados.get('passo')
-    evidencia = dados.get('evidencia')
+    passo_index = str(dados.get('passo'))
+    evidencia = dados.get('evidencia', '').strip()
+
+    if not evidencia:
+        return jsonify({'erro': 'Evidência vazia'}), 400
 
     if 'evidencias' not in session:
         session['evidencias'] = {}
 
-    session['evidencias'][str(passo_index)] = evidencia
-    return {'status': 'ok'}
-
-
-@app.route('/salvar_evidencia', methods=['POST'])
-def salvar_evidencia():
-    dados = request.get_json()
-    indice = str(dados.get('indice'))
-    evidencia = dados.get('evidencia')
-
-    if 'evidencias' not in session:
-        session['evidencias'] = {}
-
-    evidencias = session['evidencias']
-    evidencias[indice] = evidencia
-    session['evidencias'] = evidencias
+    session['evidencias'][passo_index] = evidencia
     session.modified = True
-
-    return '', 204
-
+    return {'status': 'ok'}
 
 @app.route('/salvar_finalizacao', methods=['POST'])
 def salvar_finalizacao():
     if not request.is_json:
-        return 'Formato inválido', 400
+        return {'erro': 'Formato JSON esperado'}, 400
 
-    _ = request.get_json()
+    data = request.get_json()
+    melhorias = data.get('melhorias', '').strip()
+    observacoes = data.get('observacoes', '').strip()
+
+    if not melhorias or not observacoes:
+        return {'erro': 'Todos os campos devem ser preenchidos'}, 400
+
+    session['licoes'] = {
+        'melhorias': melhorias,
+        'observacoes': observacoes
+    }
 
     session['fim'] = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-
+    session.modified = True
     return '', 204
-
 
 @app.route('/incident/finalizar', methods=['GET', 'POST'])
 def finalizar():
     return render_template('finalizar.html')
-
 
 @app.route('/incident/relatorio')
 def relatorio():
@@ -180,17 +168,16 @@ def relatorio():
     evidencias = session.get('evidencias', {})
     inicio_registo = session.get('inicio_registo', 'N/D')
     fim = session.get('fim', datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
+    licoes = session.get('licoes', {})
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    # Cabeçalho
     pdf.set_font("Arial", 'B', 18)
     pdf.cell(0, 10, "Relatório do Incidente", ln=True, align="C")
     pdf.ln(10)
 
-    # Dados do incidente
     pdf.set_font("Arial", '', 12)
     pdf.cell(0, 10, f"Classe do Incidente: {classe}", ln=True)
     pdf.cell(0, 10, f"Tipo de Incidente: {tipo}", ln=True)
@@ -198,39 +185,42 @@ def relatorio():
     pdf.cell(0, 10, f"Término do Registo: {fim}", ln=True)
     pdf.ln(10)
 
-    # Passos e evidências
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(0, 10, "Passos Executados:", ln=True)
     pdf.ln(5)
 
     for idx, passo in enumerate(passos):
-        passo_num = idx + 1
-        evidencia = evidencias.get(str(idx), "Sem evidência")
-
+        evidencia = evidencias.get(str(idx), '').split('\n')
         pdf.set_font("Arial", 'B', 12)
-        pdf.multi_cell(0, 10, f"Passo {passo_num}: {passo}")
+        pdf.multi_cell(0, 10, f"Passo {idx}: {passo}")
         pdf.set_font("Arial", '', 12)
-        for linha in evidencia.split('\n'):
+        for linha in evidencia:
             pdf.cell(10)
             pdf.cell(0, 10, f"- {linha.strip()}", ln=True)
         pdf.ln(3)
 
-    # Rodapé
+    if licoes:
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(0, 10, "Lições Aprendidas:", ln=True)
+        pdf.set_font("Arial", '', 12)
+        pdf.multi_cell(0, 10, f"Melhorias: {licoes.get('melhorias', '')}")
+        pdf.multi_cell(0, 10, f"Observações: {licoes.get('observacoes', '')}")
+        pdf.ln(10)
+
     pdf.set_y(-30)
     pdf.set_font("Arial", 'I', 10)
     data_hoje = datetime.now().strftime('%d/%m/%Y')
     pdf.cell(0, 10, f"Este relatório foi gerado automaticamente através da aplicação no dia {data_hoje}.", align="L")
-    pdf.cell(0, 10, f"Página {pdf.page_no()} de 1", align="R")
+    pdf.cell(0, 10, f"Página {pdf.page_no()}", align="R")
 
-    # Exportar PDF
     pdf_bytes = pdf.output(dest='S').encode('latin-1')
     pdf_stream = io.BytesIO(pdf_bytes)
 
     agora = datetime.now().strftime("%d-%m-%Y_%H%M%S")
     nome_arquivo = f"relatorio_{agora}.pdf"
 
+    session.clear()  # limpar a sessão só depois de gerar
     return send_file(pdf_stream, mimetype='application/pdf', download_name=nome_arquivo, as_attachment=True)
-
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -55,6 +55,7 @@
       font-weight: bold;
       text-decoration: none;
       transition: background-color 0.3s;
+      cursor: pointer;
     }
 
     .btn-relatorio {
@@ -77,37 +78,49 @@
 <body>
   <div class="mensagem">
     <h2>Todos os passos foram concluídos com sucesso! ✅</h2>
-    <p>As informações foram carregadas para gerar o relatório.</p>
+    <p>Antes de gerar o relatório, por favor insira as informações finais abaixo:</p>
 
-    <div class="botoes">
-      <a href="#" class="btn btn-relatorio" onclick="guardarTodasEvidenciasEFinalizar()">📄 Relatório PDF</a>
-      <a href="{{ url_for('index') }}" class="btn btn-home">🔙 Página Inicial</a>
-    </div>
+    <form id="finalForm">
+      <label for="melhorias"><strong>Pontos a Melhorar:</strong></label>
+      <textarea id="melhorias" name="melhorias" placeholder="Descreva os pontos a melhorar..." required></textarea>
+
+      <label for="observacoes"><strong>Observações Finais:</strong></label>
+      <textarea id="observacoes" name="observacoes" placeholder="Insira observações adicionais..." required></textarea>
+
+      <div class="botoes">
+        <button type="submit" class="btn btn-relatorio">📄 Gerar Relatório PDF</button>
+        <a href="{{ url_for('index') }}" class="btn btn-home">🔙 Página Inicial</a>
+      </div>
+    </form>
   </div>
 
   <script>
-  function guardarTodasEvidenciasEFinalizar() {
-  const totalPassos = document.querySelectorAll('[id^=evidencia-]').length;
-  const requests = [];
+    document.getElementById('finalForm').addEventListener('submit', function (e) {
+      e.preventDefault();
 
-  for (let i = 0; i < totalPassos; i++) {
-    const evidencia = document.getElementById(`evidencia-${i}`).value;
-    requests.push(
-      fetch('/salvar_evidencia', {
+      const melhorias = document.getElementById('melhorias').value.trim();
+      const observacoes = document.getElementById('observacoes').value.trim();
+
+      if (!melhorias || !observacoes) {
+        alert("Por favor, preencha todos os campos.");
+        return;
+      }
+
+      fetch('/salvar_finalizacao', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ indice: i, evidencia })
+        body: JSON.stringify({ melhorias, observacoes })
       })
-    );
-  }
-
-  Promise.all(requests).then(() => {
-    fetch('/salvar_finalizacao', { method: 'POST' }).then(() => {
-      window.open("/incident/relatorio", "_blank");
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(data => { throw new Error(data.erro || "Erro ao guardar os dados."); });
+        }
+        window.open("/incident/relatorio", "_blank");
+      })
+      .catch(error => {
+        alert("Erro: " + error.message);
+      });
     });
-  });
-}
-
-</script>
+  </script>
 </body>
 </html>
