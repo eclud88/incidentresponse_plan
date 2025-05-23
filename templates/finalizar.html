@@ -86,31 +86,22 @@
   </div>
 
   <script>
-    function guardarEDownload() {
-      const melhorias = document.getElementById("melhorias").value.trim();
-      const observacoes = document.getElementById("observacoes").value.trim();
-
-      if (!melhorias || !observacoes) {
-        alert("Por favor, preencha todos os campos antes de gerar o relatório.");
-        return;
+  function guardarEDownload() {
+    fetch("/incident/finalizar", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+    })
+    .then(response => {
+      if (response.ok) {
+        window.open("/incident/relatorio", "_blank");
+      } else {
+        alert("Erro ao guardar dados. Tente novamente.");
       }
-
-      fetch("/salvar_finalizacao", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ melhorias, observacoes })
-      })
-      .then(response => {
-        if (response.ok) {
-          window.open("/incident/relatorio", "_blank");
-        } else {
-          alert("Erro ao guardar dados. Tente novamente.");
-        }
-      })
-      .catch(() => alert("Erro de comunicação com o servidor."));
-    }
-  </script>
+    })
+    .catch(() => alert("Erro de comunicação com o servidor."));
+  }
+</script>
 </body>
 </html>
