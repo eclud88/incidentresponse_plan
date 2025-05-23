@@ -80,28 +80,34 @@
     <p>As informações foram carregadas para gerar o relatório.</p>
 
     <div class="botoes">
-      <a href="#" class="btn btn-relatorio" onclick="guardarEDownload()">📄 Relatório PDF</a>
+      <a href="#" class="btn btn-relatorio" onclick="guardarTodasEvidenciasEFinalizar()">📄 Relatório PDF</a>
       <a href="{{ url_for('index') }}" class="btn btn-home">🔙 Página Inicial</a>
     </div>
   </div>
 
   <script>
-  function guardarEDownload() {
-    fetch("/incident/finalizar", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-    })
-    .then(response => {
-      if (response.ok) {
-        window.open("/incident/relatorio", "_blank");
-      } else {
-        alert("Erro ao guardar dados. Tente novamente.");
-      }
-    })
-    .catch(() => alert("Erro de comunicação com o servidor."));
+  function guardarTodasEvidenciasEFinalizar() {
+  const totalPassos = document.querySelectorAll('[id^=evidencia-]').length;
+  const requests = [];
+
+  for (let i = 0; i < totalPassos; i++) {
+    const evidencia = document.getElementById(`evidencia-${i}`).value;
+    requests.push(
+      fetch('/salvar_evidencia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ indice: i, evidencia })
+      })
+    );
   }
+
+  Promise.all(requests).then(() => {
+    fetch('/salvar_finalizacao', { method: 'POST' }).then(() => {
+      window.open("/incident/relatorio", "_blank");
+    });
+  });
+}
+
 </script>
 </body>
 </html>
