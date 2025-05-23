@@ -87,6 +87,7 @@ def incident():
 
 @app.route('/incident/passos', methods=['GET', 'POST'])
 def passos():
+    session['inicio_registo'] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
     passos_incidentes = carregar_passos_incidentes()
 
     # Normalização da estrutura
@@ -159,7 +160,7 @@ def salvar_finalizacao():
     dados = request.get_json()
     session['melhorias'] = dados.get('melhorias', '')
     session['observacoes'] = dados.get('observacoes', '')
-    session['fim'] = datetime.now().strftime('%d/%m/%Y %H:%M:%S')  # ⬅️ NOVO
+    session['fim'] = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
 
     return '', 204
 
@@ -177,7 +178,7 @@ def relatorio():
     evidencias = session.get('evidencias', {})
     melhorias = session.get('melhorias', 'N/D')
     observacoes = session.get('observacoes', 'N/D')
-    inicio = session.get('inicio', 'N/D')
+    inicio_registo = session.get('inicio_registo', 'N/D')
     fim = session.get('fim', datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
 
     pdf = FPDF()
@@ -236,7 +237,12 @@ def relatorio():
     # Exportar PDF
     pdf_bytes = pdf.output(dest='S').encode('latin-1')
     pdf_stream = io.BytesIO(pdf_bytes)
-    return send_file(pdf_stream, mimetype='application/pdf', download_name='relatorio_incidente.pdf')
+
+    agora = datetime.now().strftime("%d-%m-%Y_%H%M%S")
+    nome_arquivo = f"relatorio_{agora}.pdf"
+
+
+    return send_file(pdf_stream, mimetype='application/pdf', download_name='nome_arquivo')
 
 
 if __name__ == '__main__':

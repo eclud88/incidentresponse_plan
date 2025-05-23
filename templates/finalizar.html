@@ -21,7 +21,8 @@
       border-radius: 12px;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       text-align: center;
-      width: 600px;
+      max-width: 600px;
+      width: 100%;
     }
 
     .mensagem h2 {
@@ -31,48 +32,44 @@
     textarea {
       width: 100%;
       height: 80px;
-      margin-top: 10px;
-      margin-bottom: 20px;
+      margin: 10px 0 20px 0;
       padding: 10px;
       border-radius: 8px;
       border: 1px solid #ccc;
       font-size: 14px;
+      resize: vertical;
     }
 
     .botoes {
-      margin-top: 20px;
-    }
-
-    .botoes a {
-      text-decoration: none;
-      margin: 0 10px;
+      margin-top: 30px;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
     }
 
     .btn {
       padding: 10px 20px;
-      background-color: #28a745;
       border-radius: 8px;
       color: white;
-      text-decoration: none;
       font-weight: bold;
+      text-decoration: none;
       transition: background-color 0.3s;
     }
 
-    .btn:hover {
+    .btn-relatorio {
+      background-color: #28a745;
+    }
+
+    .btn-relatorio:hover {
       background-color: #218838;
     }
 
-    .btn_btn {
-      padding: 10px 20px;
+    .btn-home {
       background-color: #8A00C2;
-      border-radius: 8px;
-      color: white;
-      text-decoration: none;
-      font-weight: bold;
-      transition: background-color 0.3s;
     }
 
-    .btn_btn:hover {
+    .btn-home:hover {
       background-color: #6b008e;
     }
   </style>
@@ -80,24 +77,23 @@
 <body>
   <div class="mensagem">
     <h2>Todos os passos foram concluídos com sucesso! ✅</h2>
-    <p>Preencha os campos abaixo antes de gerar o relatório.</p>
+    <p>As informações foram carregadas para gerar o relatório.</p>
 
-    <label for="melhorias"><strong>Pontos de Melhoria:</strong></label>
-    <textarea id="melhorias" placeholder="Descreva os pontos de melhoria identificados..."></textarea>
-
-    <label for="observacoes"><strong>Observações Finais:</strong></label>
-    <textarea id="observacoes" placeholder="Adicione observações adicionais, se necessário..."></textarea>
-
-    <div class="botoes" style="text-align: center; margin-top: 30px;">
-      <a href="#" class="btn" onclick="guardarEDownload()">📄 Relatório PDF</a>
-      <a href="{{ url_for('index') }}" class="btn_btn">🔙 Página Inicial</a>
+    <div class="botoes">
+      <a href="#" class="btn btn-relatorio" onclick="guardarEDownload()">📄 Relatório PDF</a>
+      <a href="{{ url_for('index') }}" class="btn btn-home">🔙 Página Inicial</a>
     </div>
   </div>
 
   <script>
     function guardarEDownload() {
-      const melhorias = document.getElementById("melhorias").value;
-      const observacoes = document.getElementById("observacoes").value;
+      const melhorias = document.getElementById("melhorias").value.trim();
+      const observacoes = document.getElementById("observacoes").value.trim();
+
+      if (!melhorias || !observacoes) {
+        alert("Por favor, preencha todos os campos antes de gerar o relatório.");
+        return;
+      }
 
       fetch("/salvar_finalizacao", {
         method: "POST",
@@ -108,11 +104,12 @@
       })
       .then(response => {
         if (response.ok) {
-          window.location.href = "/incident/relatorio";
+          window.open("/incident/relatorio", "_blank");
         } else {
-          alert("Erro ao guardar dados.");
+          alert("Erro ao guardar dados. Tente novamente.");
         }
-      });
+      })
+      .catch(() => alert("Erro de comunicação com o servidor."));
     }
   </script>
 </body>

@@ -80,7 +80,23 @@
         </div>
         {% endfor %}
 
+        <!-- Abas: Lições Aprendidas -->
+        <div class="tab-pane fade" id="passo-licoes" role="tabpanel" aria-labelledby="tab-licoes">
+          <h5 class="fw-semibold">Lições Aprendidas</h5>
 
+          <label for="melhorias" class="form-label mt-3">Melhorias a implementar:</label>
+          <textarea id="melhorias" class="form-control mb-3" rows="4"
+                    placeholder="Descreva as melhorias sugeridas..."></textarea>
+
+          <label for="observacoes" class="form-label">Observações Finais:</label>
+          <textarea id="observacoes" class="form-control mb-3" rows="4"
+                    placeholder="Outras observações relevantes..."></textarea>
+
+          <div class="d-flex justify-content-between mt-4">
+            <button class="btn btn-secondary" onclick="voltarPasso('licoes')">Passo Anterior</button>
+            <button class="btn btn-purple" id="btn-finalizar" onclick="finalizarPlano()" disabled>Finalizar Plano</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -134,7 +150,7 @@
   function voltarPasso(indiceAtual) {
     let anteriorBotao;
 
-    if (indiceAtual === 'licoes') {
+    if (indiceAtual === 'licoes' || indiceAtual === {{ passos|length }}) {
       anteriorBotao = document.getElementById(`tab-{{ passos|length - 1 }}`);
     } else {
       anteriorBotao = document.getElementById(`tab-${indiceAtual - 1}`);
@@ -163,7 +179,7 @@
     });
   }
 
-  // Ativa o botão "Finalizar" somente se campos estiverem preenchidos
+  // Ativa o botão "Finalizar" somente se os campos forem preenchidos
   document.addEventListener('DOMContentLoaded', function () {
     const melhoriasInput = document.getElementById("melhorias");
     const observacoesInput = document.getElementById("observacoes");
