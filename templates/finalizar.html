@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <title>Processo Concluído</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(90deg, #E0BBE4, #957DAD, #D291BC);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .mensagem {
+      background-color: #d4edda;
+      color: #155724;
+      padding: 30px 40px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      width: 600px;
+    }
+
+    .mensagem h2 {
+      margin-top: 0;
+    }
+
+    textarea {
+      width: 100%;
+      height: 80px;
+      margin-top: 10px;
+      margin-bottom: 20px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+
+    .botoes {
+      margin-top: 20px;
+    }
+
+    .botoes a {
+      text-decoration: none;
+      margin: 0 10px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      background-color: #28a745;
+      border-radius: 8px;
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+      transition: background-color 0.3s;
+    }
+
+    .btn:hover {
+      background-color: #218838;
+    }
+
+    .btn_btn {
+      padding: 10px 20px;
+      background-color: #8A00C2;
+      border-radius: 8px;
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+      transition: background-color 0.3s;
+    }
+
+    .btn_btn:hover {
+      background-color: #6b008e;
+    }
+  </style>
+</head>
+<body>
+  <div class="mensagem">
+    <h2>Todos os passos foram concluídos com sucesso! ✅</h2>
+    <p>Preencha os campos abaixo antes de gerar o relatório.</p>
+
+    <label for="melhorias"><strong>Pontos de Melhoria:</strong></label>
+    <textarea id="melhorias" placeholder="Descreva os pontos de melhoria identificados..."></textarea>
+
+    <label for="observacoes"><strong>Observações Finais:</strong></label>
+    <textarea id="observacoes" placeholder="Adicione observações adicionais, se necessário..."></textarea>
+
+    <div class="botoes" style="text-align: center; margin-top: 30px;">
+      <a href="#" class="btn" onclick="guardarEDownload()">📄 Relatório PDF</a>
+      <a href="{{ url_for('index') }}" class="btn_btn">🔙 Página Inicial</a>
+    </div>
+  </div>
+
+  <script>
+    function guardarEDownload() {
+      const melhorias = document.getElementById("melhorias").value;
+      const observacoes = document.getElementById("observacoes").value;
+
+      fetch("/salvar_finalizacao", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ melhorias, observacoes })
+      })
+      .then(response => {
+        if (response.ok) {
+          window.location.href = "/incident/relatorio";
+        } else {
+          alert("Erro ao guardar dados.");
+        }
+      });
+    }
+  </script>
+</body>
+</html>

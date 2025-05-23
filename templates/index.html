@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card-custom text-center p-4">
+            <h2 class="mb-4">Plano de Resposta a Incidentes</h2>
+            <form method="POST" action="{{ url_for('login') }}">
+                <div class="mb-3">
+                    <label for="username" class="form-label fw-bold w-100">Utilizador</label>
+                    <input type="text"
+                           class="form-control rounded-pill mx-auto text-center"
+                           name="username"
+                           required
+                           style="max-width: 300px;">
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label fw-bold w-100">Senha</label>
+                    <input type="password"
+                           class="form-control rounded-pill mx-auto text-center"
+                           name="password"
+                           required
+                           style="max-width: 300px;">
+                </div>
+                {% if message %}
+                    <div class="alert alert-danger">{{ message }}</div>
+                {% endif %}
+                <div class="d-grid justify-content-center">
+                    <button type="submit"
+                            class="btn btn-purple"
+                            style="width: 300px;">
+                        Entrar
+                    </button>
+                </div>
+            </form>
+            <p class="text-center mt-3 text-muted">Data atual: {{ data_atual }}</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

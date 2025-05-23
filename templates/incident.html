@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}Incidentes{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card-custom p-4 shadow rounded-4 bg-white">
+            <h3 class="mb-4 text-center">Registo de Incidente</h3>
+
+            <!-- CORRIGIDO: action para /incident/passos -->
+            <form action="/incident/passos" method="POST">
+                <!-- Seleção de Classe -->
+                <div class="mb-3">
+                    <label for="classe" class="form-label">Classe do Incidente</label>
+                    <select name="classe" id="classe" class="form-select rounded-pill" onchange="atualizarTipos()" required>
+                        <option value="">Selecione</option>
+                        {% for incidente in incidentes %}
+                            <option value="{{ incidente.classe }}" {% if incidente.classe == classe %}selected{% endif %}>
+                                {{ incidente.classe }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Seleção de Tipo (será atualizado via JS) -->
+                <div class="mb-3">
+                    <label for="tipo" class="form-label">Tipo do Incidente</label>
+                    <select name="tipo" id="tipo" class="form-select rounded-pill" required>
+                        <option value="">Selecione a classe primeiro</option>
+                    </select>
+                </div>
+
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-purple rounded-pill">Submeter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Script para atualizar os tipos com base na classe selecionada -->
+<script>
+    const incidentes = {{ incidentes | tojson }};
+    const classeAtual = "{{ classe | default('') }}";
+    const tipoAtual = "{{ tipo | default('') }}";
+
+    function atualizarTipos() {
+        const classeSelecionada = document.getElementById("classe").value;
+        const tipoSelect = document.getElementById("tipo");
+
+        tipoSelect.innerHTML = '<option value="">Selecione um tipo</option>';
+
+        const classeEncontrada = incidentes.find(inc => inc.classe === classeSelecionada);
+        if (classeEncontrada) {
+            classeEncontrada.tipos.forEach(tipo => {
+                const option = document.createElement("option");
+                option.value = tipo;
+                option.textContent = tipo;
+                if (tipo === tipoAtual) {
+                    option.selected = true;
+                }
+                tipoSelect.appendChild(option);
+            });
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        if (classeAtual) {
+            document.getElementById("classe").value = classeAtual;
+            atualizarTipos();
+        }
+    });
+</script>
+{% endblock %}

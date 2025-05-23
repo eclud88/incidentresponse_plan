@@ -1,0 +1,90 @@
+[
+  {
+    "classe": "Código Malicioso",
+    "tipos": [
+      "Sistema Infetado",
+      "Distribuição de Malware",
+      "Servidor C2",
+      "Configuração de Malware"
+    ]
+  },
+  {
+    "classe": "Disponibilidade",
+    "tipos": [
+      "Negação de Serviço",
+      "Negação de Serviço Distribuída",
+      "Configuração Incorreta",
+      "Sabotagem",
+      "Interrupção"
+    ]
+  },
+  {
+    "classe": "Recolha de Informação",
+    "tipos": [
+      "Scanning",
+      "Sniffing",
+      "Engenharia Social"
+    ]
+  },
+  {
+    "classe": "Intrusão",
+    "tipos": [
+      "Comprometimento de Conta Privilegiada",
+      "Comprometimento de Conta Não Privilegiada",
+      "Comprometimento de Aplicação",
+      "Comprometimento de Sistema",
+      "Arrombamento"
+    ]
+  },
+  {
+    "classe": "Tentativa de Intrusão",
+    "tipos": [
+      "Exploração de Vulnerabilidade",
+      "Tentativa de Login",
+      "Nova Assinatura de Ataque"
+    ]
+  },
+  {
+    "classe": "Segurança da Informação",
+    "tipos": [
+      "Acesso Não Autorizado",
+      "Modificação Não Autorizada",
+      "Perda de Dados",
+      "Exfiltração de Informação"
+    ]
+  },
+  {
+    "classe": "Fraude",
+    "tipos": [
+      "Utilização indevida ou não autorizada de recursos",
+      "Direitos de Autor",
+      "Utilização ilegítima de nome de terceiros",
+      "Phishing"
+    ]
+  },
+  {
+    "classe": "Conteúdo Abusivo",
+    "tipos": [
+      "SPAM",
+      "Discurso Nocivo",
+      "Exploração sexual de menores, racismo e apologia da violência"
+    ]
+  },
+  {
+    "classe": "Vulnerabilidade",
+    "tipos": [
+      "Criptografia fraca",
+      "Amplificador DDoS",
+      "Serviços acessíveis potencialmente indesejados",
+      "Revelação de informação",
+      "Sistema Vulnerável"
+    ]
+  },
+  {
+    "classe": "Outro",
+    "tipos": [
+      "Sem tipo",
+      "Indeterminado"
+    ]
+  }
+]
