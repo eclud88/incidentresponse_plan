@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, abort, send_file, session, jsonify
+from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from fpdf import FPDF
 import os
@@ -8,237 +9,294 @@ import json
 app = Flask(__name__)
 app.secret_key = 'secret_key_1234'
 
-# Simulando uma base de dados simples
-UTILIZADORES = {
+# Database configuration
+basedir = os.path.abspath(os.path.dirname(__file__))
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+USERS = {
     'admin': 'senha123',
-    'usuario': '123456'
+    'user': '123456'
 }
 
-# Caminho para os ficheiros JSON
-CAMINHO_INCIDENTES = os.path.join(os.path.dirname(__file__), 'incidentes.json')
-CAMINHO_PASSOS = os.path.join(os.path.dirname(__file__), 'passos_incidentes.json')
+INCIDENTS_PATH = os.path.join(basedir, 'incidentes.json')
+STEPS_PATH = os.path.join(basedir, 'passos_incidentes.json')
 
-def carregar_incidentes():
-    with open(CAMINHO_INCIDENTES, 'r', encoding='utf-8') as f:
+
+class Incident(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100))
+    creation_date = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(50), default='In Progress')
+    improvements = db.Column(db.Text)
+    observations = db.Column(db.Text)
+
+
+def load_incidents():
+    with open(INCIDENTS_PATH, 'r', encoding='utf-8') as f:
         return json.load(f)
 
-def carregar_passos_incidentes():
-    with open(CAMINHO_PASSOS, 'r', encoding='utf-8') as p:
-        return json.load(p)
+
+def load_incident_steps():
+    with open(STEPS_PATH, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
 
 @app.route('/')
 def index():
-    data_atual = datetime.now().strftime('%d/%m/%Y')
-    return render_template('index.html', data_atual=data_atual)
+    current_date = datetime.now().strftime('%d/%m/%Y')
+    version = "1.0.0"
+    return render_template('index.html', current_date=current_date, version=version, show_user_dropdown=False)
+
 
 @app.route('/login', methods=['POST'])
 def login():
     username = request.form['username']
     password = request.form['password']
-    data_atual = datetime.now().strftime('%d/%m/%Y')
 
-    if username in UTILIZADORES and UTILIZADORES[username] == password:
-        session.clear()
-        return redirect(url_for('incident'))
-    else:
-        return render_template('index.html', message="Utilizador ou senha inválidos.", data_atual=data_atual)
+    if username in USERS and USERS[username] == password:
+        session['username'] = username
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('index'))
 
 
-@app.route('/dashboard')
+@app.route('/dashboard', methods=['GET'])
 def dashboard():
-    incidentes = obter_incidentes_do_utilizador(current_user.id)
-    return render_template('dashboard.html', incidentes=incidentes)
-
-
+    username = session.get('username')
+    incidents = Incident.query.order_by(Incident.creation_date.desc()).all()
+    return render_template('dashboard.html', incidents=incidents, show_user_dropdown=True)
 
 
 @app.route('/incident', methods=['GET', 'POST'])
 def incident():
-    incidentes = carregar_incidentes()
-    passos_incidentes = carregar_passos_incidentes()
+    incidents = load_incidents()
+    incident_steps = load_incident_steps()
+    if isinstance(incident_steps[0], list):
+        incident_steps = incident_steps[0]
 
-    if isinstance(passos_incidentes[0], list):
-        passos_incidentes = passos_incidentes[0]
-
-    passos = []
-    classe_selecionada = ''
-    tipo_selecionado = ''
+    steps = []
+    selected_class = ''
+    selected_type = ''
 
     if request.method == 'POST':
-        classe_selecionada = request.form.get('classe')
-        tipo_selecionado = request.form.get('tipo')
+        selected_class = request.form.get('class')
+        selected_type = request.form.get('type')
 
-        session['classe'] = classe_selecionada
-        session['tipo'] = tipo_selecionado
-        session['inicio'] = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+        session['class'] = selected_class
+        session['type'] = selected_type
+        session['start'] = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
 
-        if classe_selecionada and tipo_selecionado:
-            return redirect(url_for('passos', classe_selecionada=classe_selecionada, tipo_selecionado=tipo_selecionado))
+        if selected_class and selected_type:
+            return redirect(url_for('steps', selected_class=selected_class, selected_type=selected_type))
 
-        for c in passos_incidentes:
-            if c.get('classe') == classe_selecionada:
-                for t in c.get('tipos', []):
-                    if t.get('tipo') == tipo_selecionado:
-                        passos = t.get('passos', [])
-                        session['passos'] = passos
-                        break
+    return render_template('incident.html', incidents=incidents, steps=steps, selected_class=selected_class, selected_type=selected_type, show_user_dropdown=True)
 
-    return render_template(
-        'incident.html',
-        incidentes=incidentes,
-        passos=passos,
-        classe=classe_selecionada,
-        tipo=tipo_selecionado
-    )
 
-@app.route('/incident/passos', methods=['GET', 'POST'])
-def passos():
-    session['inicio_registo'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    passos_incidentes = carregar_passos_incidentes()
+@app.route('/incident/steps', methods=['GET', 'POST'])
+def steps():
+    session['record_start'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    incident_steps = load_incident_steps()
 
-    if isinstance(passos_incidentes, list) and len(passos_incidentes) == 1 and isinstance(passos_incidentes[0], list):
-        passos_incidentes = passos_incidentes[0]
+    if isinstance(incident_steps, list) and len(incident_steps) == 1 and isinstance(incident_steps[0], list):
+        incident_steps = incident_steps[0]
 
     if request.method == 'GET':
-        classe_req = request.args.get('classe')
-        tipo_req = request.args.get('tipo')
+        class_req = request.args.get('class')
+        type_req = request.args.get('type')
     else:
-        classe_req = request.form.get('classe') or (request.get_json() or {}).get('classe')
-        tipo_req = request.form.get('tipo') or (request.get_json() or {}).get('tipo')
+        class_req = request.form.get('class') or (request.get_json() or {}).get('class')
+        type_req = request.form.get('type') or (request.get_json() or {}).get('type')
 
-    if not classe_req or not tipo_req:
-        return abort(400, description="Parâmetros 'classe' e 'tipo' são obrigatórios.")
+    if not class_req or not type_req:
+        return abort(400, description="Parameters 'class' and 'type' are required.")
 
-    passos_encontrados = None
-    for classe in passos_incidentes:
-        if classe.get('classe', '').lower() == classe_req.lower():
-            for tipo in classe.get('tipos', []):
-                if tipo.get('tipo', '').lower() == tipo_req.lower():
-                    passos_encontrados = tipo.get('passos', [])
+    found_steps = None
+    for item in incident_steps:
+        if item.get('class', '').lower() == class_req.lower():
+            for type_item in item.get('types', []):
+                if type_item.get('type', '').lower() == type_req.lower():
+                    found_steps = type_item.get('steps', [])
                     break
-            if passos_encontrados:
+            if found_steps:
                 break
 
-    if not passos_encontrados:
-        return abort(404, description="Plano de passos não encontrado para a classe e tipo informados.")
+    if not found_steps:
+        return abort(404, description="Step plan not found.")
 
-    session['classe'] = classe_req
-    session['tipo'] = tipo_req
-    session['passos'] = passos_encontrados
+    session['class'] = class_req
+    session['type'] = type_req
+    session['steps'] = found_steps
 
-    return render_template('passos.html', passos=passos_encontrados, classe=classe_req, tipo=tipo_req)
+    return render_template('steps.html', steps=found_steps, selected_class=class_req, selected_type=type_req, show_user_dropdown=True)
 
-@app.route('/incident/salvar_passo', methods=['POST'])
-def salvar_passo():
-    dados = request.get_json()
-    passo_index = str(dados.get('passo'))
-    evidencia = dados.get('evidencia', '').strip()
 
-    if not evidencia:
-        return jsonify({'erro': 'Evidência vazia'}), 400
+@app.route('/incident/save_step', methods=['POST'])
+def save_step():
+    data = request.get_json()
+    step_index = str(data.get('step'))
+    evidence = data.get('evidence', '').strip()
 
-    if 'evidencias' not in session:
-        session['evidencias'] = {}
+    if not evidence:
+        return jsonify({'error': 'Empty evidence'}), 400
 
-    session['evidencias'][passo_index] = evidencia
+    if 'evidences' not in session:
+        session['evidences'] = {}
+
+    session['evidences'][step_index] = evidence
     session.modified = True
     return {'status': 'ok'}
 
-@app.route('/salvar_finalizacao', methods=['POST'])
-def salvar_finalizacao():
+
+@app.route('/save_completion', methods=['POST'])
+def save_completion():
     if not request.is_json:
-        return {'erro': 'Formato JSON esperado'}, 400
+        return {'error': 'JSON format expected'}, 400
 
     data = request.get_json()
-    evidencia = data.get('evidencia', '').strip()
-    passo = str(data.get('passo'))
+    evidence = data.get('evidence', '').strip()
+    step = str(data.get('step'))
 
-    melhorias = data.get('melhorias', '').strip()
-    observacoes = data.get('observacoes', '').strip()
+    improvements = data.get('improvements', '').strip()
+    observations = data.get('observations', '').strip()
 
-    if not melhorias or not observacoes:
-        return {'erro': 'Todos os campos devem ser preenchidos'}, 400
+    if not improvements or not observations:
+        return {'error': 'All fields must be filled'}, 400
 
-    if 'evidencias' not in session:
-        session['evidencias'] = {}
+    if 'evidences' not in session:
+        session['evidences'] = {}
 
-    session['evidencias'][passo] = evidencia
-    session['licoes'] = {
-        'melhorias': melhorias,
-        'observacoes': observacoes
-    }
-
-    session['fim'] = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+    session['evidences'][step] = evidence
+    session['lessons'] = {'improvements': improvements, 'observations': observations}
+    session['end'] = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
     session.modified = True
     return '', 204
 
 
+@app.route('/incident/complete', methods=['GET', 'POST'])
+def complete():
+    return render_template('complete.html')
 
-@app.route('/incident/finalizar', methods=['GET', 'POST'])
-def finalizar():
-    return render_template('finalizar.html')
 
-@app.route('/incident/relatorio')
-def relatorio():
-    classe = session.get('classe', 'N/D')
-    tipo = session.get('tipo', 'N/D')
-    passos = session.get('passos', [])
-    evidencias = session.get('evidencias', {})
-    inicio_registo = session.get('inicio_registo', 'N/D')
-    fim = session.get('fim', datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
-    licoes = session.get('licoes', {})
+@app.route('/incident/report')
+def report():
+    incident_class = session.get('class', 'N/A')
+    incident_type = session.get('type', 'N/A')
+    steps = session.get('steps', [])
+    evidences = session.get('evidences', {})
+    record_start = session.get('record_start', 'N/A')
+    end_time = session.get('end', datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
+    lessons = session.get('lessons', {})
+
+    improvements = lessons.get('improvements', '')
+    observations = lessons.get('observations', '')
+
+    new_incident = Incident(
+        name=f"{incident_class} - {incident_type}",
+        creation_date=datetime.now(),
+        status="Completed",
+        improvements=improvements,
+        observations=observations
+    )
+    db.session.add(new_incident)
+    db.session.commit()
+
+    session['report_ready'] = True
+    session['report_data'] = {
+        'class': incident_class,
+        'type': incident_type,
+        'steps': steps,
+        'evidences': evidences,
+        'record_start': record_start,
+        'end': end_time,
+        'improvements': improvements,
+        'observations': observations
+    }
+
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/download_report')
+def download_report():
+    data = session.get('report_data')
+    if not data:
+        return redirect(url_for('dashboard'))
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
     pdf.set_font("Arial", 'B', 18)
-    pdf.cell(0, 10, "Relatório do Incidente", ln=True, align="C")
+    pdf.cell(0, 10, "Incident Report", ln=True, align="C")
     pdf.ln(10)
 
     pdf.set_font("Arial", '', 12)
-    pdf.cell(0, 10, f"Classe do Incidente: {classe}", ln=True)
-    pdf.cell(0, 10, f"Tipo de Incidente: {tipo}", ln=True)
-    pdf.cell(0, 10, f"Início do Registo: {inicio_registo}", ln=True)
-    pdf.cell(0, 10, f"Término do Registo: {fim}", ln=True)
+    pdf.cell(0, 10, f"Incident Class: {data['class']}", ln=True)
+    pdf.cell(0, 10, f"Incident Type: {data['type']}", ln=True)
+    pdf.cell(0, 10, f"Start Time: {data['record_start']}", ln=True)
+    pdf.cell(0, 10, f"End Time: {data['end']}", ln=True)
     pdf.ln(10)
 
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, "Passos Executados:", ln=True)
+    pdf.cell(0, 10, "Executed Steps:", ln=True)
     pdf.ln(5)
 
-    for idx, passo in enumerate(passos):
-        evidencia = evidencias.get(str(idx), '').split('\n')
+    for idx, step in enumerate(data['steps']):
+        evidence_lines = data['evidences'].get(str(idx), '').split('\n')
         pdf.set_font("Arial", 'B', 12)
-        pdf.multi_cell(0, 10, f"Passo {idx + 1}: {passo}")
+        pdf.multi_cell(0, 10, f"Step {idx + 1}: {step}")
         pdf.set_font("Arial", '', 12)
-        for linha in evidencia:
+        for line in evidence_lines:
             pdf.cell(10)
-            pdf.cell(0, 10, f"- {linha.strip()}", ln=True)
+            pdf.cell(0, 10, f"- {line.strip()}", ln=True)
         pdf.ln(3)
 
-    if licoes:
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(0, 10, "Lições Aprendidas:", ln=True)
-        pdf.set_font("Arial", '', 12)
-        pdf.multi_cell(0, 10, f"Melhorias: {licoes.get('melhorias', '')}")
-        pdf.multi_cell(0, 10, f"Observações: {licoes.get('observacoes', '')}")
-        pdf.ln(10)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, "Lessons Learned:", ln=True)
+    pdf.set_font("Arial", '', 12)
+    pdf.multi_cell(0, 10, f"Improvements: {data['improvements']}")
+    pdf.multi_cell(0, 10, f"Observations: {data['observations']}")
+    pdf.ln(10)
 
     pdf.set_y(-30)
     pdf.set_font("Arial", 'I', 10)
-    data_hoje = datetime.now().strftime('%d/%m/%Y')
-    pdf.cell(0, 10, f"Este relatório foi gerado automaticamente através da aplicação no dia {data_hoje}.", align="L")
-    pdf.cell(0, 10, f"Página {pdf.page_no()}", align="R")
+    today = datetime.now().strftime('%d/%m/%Y')
+    pdf.cell(0, 10, f"This report was generated automatically on {today}.", align="L")
+    pdf.cell(0, 10, f"Page {pdf.page_no()}", align="R")
 
     pdf_bytes = pdf.output(dest='S').encode('latin-1')
     pdf_stream = io.BytesIO(pdf_bytes)
+    now_str = datetime.now().strftime("%d-%m-%Y_%H%M%S")
+    filename = f"report_{now_str}_{data['type']}.pdf"
 
-    agora = datetime.now().strftime("%d-%m-%Y_%H%M%S")
-    nome_arquivo = f"relatorio_{agora}_{tipo}.pdf"
+    session.pop('report_ready', None)
+    session.pop('report_data', None)
 
-    session.clear()  # limpar a sessão só depois de gerar
-    return send_file(pdf_stream, mimetype='application/pdf', download_name=nome_arquivo, as_attachment=True)
+    return send_file(pdf_stream, mimetype='application/pdf', download_name=filename, as_attachment=True)
+
+
+@app.before_request
+def create_tables():
+    db.create_all()
+
+
+@app.route('/delete_incident/<int:id>', methods=['POST'])
+def delete_incident(id):
+    try:
+        incident = Incident.query.get_or_404(id)
+        db.session.delete(incident)
+        db.session.commit()
+        return '', 200
+    except:
+        return jsonify({'error': 'Failed to delete'}), 400
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
+
 
 if __name__ == '__main__':
     app.run(debug=True)

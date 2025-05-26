@@ -1,36 +1,38 @@
 {% extends 'base.html' %}
-{% block title %}Incidentes{% endblock %}
+
+{% block title %}Incidents{% endblock %}
 
 {% block content %}
+
 <div class="row justify-content-center">
     <div class="col-md-8">
         <div class="card-custom p-4 shadow rounded-4 bg-white">
-            <h3 class="mb-4 text-center">Registo de Incidente</h3>
+            <h3 class="mb-4 text-center">Incident Report</h3>
 
-            <form action="/incident/passos" method="POST">
-                <!-- Seleção de Classe -->
+            <form action="/incident/steps" method="POST">
+                <!-- Class Selection -->
                 <div class="mb-3">
-                    <label for="classe" class="form-label">Classe do Incidente</label>
-                    <select name="classe" id="classe" class="form-select rounded-pill" onchange="atualizarTipos()" required>
-                        <option value="">Selecione</option>
-                        {% for incidente in incidentes %}
-                            <option value="{{ incidente.classe }}" {% if incidente.classe == classe %}selected{% endif %}>
-                                {{ incidente.classe }}
+                    <label for="class" class="form-label">Incident Class</label>
+                    <select name="class" id="class" class="form-select rounded-pill" onchange="updateTypes()" required>
+                        <option value="">Select</option>
+                        {% for incident in incidentes %}
+                            <option value="{{ incident.classe }}" {% if incident.classe == classe %}selected{% endif %}>
+                                {{ incident.classe }}
                             </option>
                         {% endfor %}
                     </select>
                 </div>
 
-                <!-- Seleção de Tipo -->
+                <!-- Type Selection -->
                 <div class="mb-3">
-                    <label for="tipo" class="form-label">Tipo do Incidente</label>
-                    <select name="tipo" id="tipo" class="form-select rounded-pill" required>
-                        <option value="">Selecione a classe primeiro</option>
+                    <label for="type" class="form-label">Incident Type</label>
+                    <select name="type" id="type" class="form-select rounded-pill" required>
+                        <option value="">Select a class first</option>
                     </select>
                 </div>
 
                 <div class="d-grid">
-                    <button type="submit" class="btn btn-purple rounded-pill">Submeter</button>
+                    <button type="submit" class="btn btn-purple rounded-pill">Submit</button>
                 </div>
             </form>
         </div>
@@ -39,36 +41,48 @@
 
 <!-- Script -->
 <script>
-    const incidentes = {{ incidentes | tojson }};
-    const classeAtual = "{{ classe | default('') }}";
-    const tipoAtual = "{{ tipo | default('') }}";
+    function toggleDropdown() {
+        document.getElementById("dropdown-content").classList.toggle("show");
+    }
 
-    function atualizarTipos() {
-        const classeSelecionada = document.getElementById("classe").value;
-        const tipoSelect = document.getElementById("tipo");
+    window.addEventListener('click', function(event) {
+        if (!event.target.matches('.user-button')) {
+            const dropdowns = document.querySelectorAll(".dropdown-content");
+            dropdowns.forEach(d => d.classList.remove("show"));
+        }
+    });
 
-        tipoSelect.innerHTML = '<option value="">Selecione um tipo</option>';
+    const incidents = {{ incidentes | tojson }};
+    const currentClass = "{{ classe | default('') }}";
+    const currentType = "{{ tipo | default('') }}";
 
-        const classeEncontrada = incidentes.find(inc => inc.classe === classeSelecionada);
-        if (classeEncontrada) {
-            classeEncontrada.tipos.forEach(tipo => {
-                const nomeTipo = typeof tipo === 'string' ? tipo : tipo.tipo;
+    function updateTypes() {
+        const selectedClass = document.getElementById("class").value;
+        const typeSelect = document.getElementById("type");
+
+        typeSelect.innerHTML = '<option value="">Select a type</option>';
+
+        const foundClass = incidents.find(inc => inc.classe === selectedClass);
+        if (foundClass) {
+            foundClass.tipos.forEach(type => {
+                const typeName = typeof type === 'string' ? type : type.tipo;
                 const option = document.createElement("option");
-                option.value = nomeTipo;
-                option.textContent = nomeTipo;
-                if (nomeTipo === tipoAtual) {
+                option.value = typeName;
+                option.textContent = typeName;
+                if (typeName === currentType) {
                     option.selected = true;
                 }
-                tipoSelect.appendChild(option);
+                typeSelect.appendChild(option);
             });
         }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        if (classeAtual) {
-            document.getElementById("classe").value = classeAtual;
-            atualizarTipos();
+        if (currentClass) {
+            document.getElementById("class").value = currentClass;
+            updateTypes();
         }
     });
 </script>
 {% endblock %}
+

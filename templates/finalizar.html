@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Processo Concluído</title>
+  <title>Process Completed</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -14,7 +14,7 @@
       margin: 0;
     }
 
-    .mensagem {
+    .message {
       background-color: #d4edda;
       color: #155724;
       padding: 30px 40px;
@@ -25,7 +25,7 @@
       width: 100%;
     }
 
-    .mensagem h2 {
+    .message h2 {
       margin-top: 0;
     }
 
@@ -40,7 +40,7 @@
       resize: vertical;
     }
 
-    .botoes {
+    .buttons {
       margin-top: 30px;
       display: flex;
       justify-content: center;
@@ -58,11 +58,11 @@
       cursor: pointer;
     }
 
-    .btn-relatorio {
+    .btn-report {
       background-color: #28a745;
     }
 
-    .btn-relatorio:hover {
+    .btn-report:hover {
       background-color: #218838;
     }
 
@@ -73,54 +73,150 @@
     .btn-home:hover {
       background-color: #6b008e;
     }
+
+    #statusMsg {
+      margin-top: 15px;
+      font-weight: bold;
+      color: #155724;
+    }
+
+    .user-dropdown {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+    }
+
+    .user-button {
+      background-color: #3498db;
+      color: white;
+      padding: 10px 16px;
+      font-size: 14px;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+    .user-button:hover {
+      background-color: #2980b9;
+    }
+
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      right: 0;
+      background-color: white;
+      min-width: 120px;
+      box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .dropdown-content a {
+      color: black;
+      padding: 10px 12px;
+      text-decoration: none;
+      display: block;
+    }
+
+    .dropdown-content a:hover {
+      background-color: #f1f1f1;
+    }
+
+    .show {
+      display: block;
+    }
   </style>
 </head>
 <body>
-  <div class="mensagem">
-    <h2>Todos os passos foram concluídos com sucesso! ✅</h2>
-    <p>Antes de gerar o relatório, por favor insira as informações finais abaixo:</p>
 
-    <form id="finalForm">
-      <label for="melhorias"><strong>Pontos a Melhorar:</strong></label>
-      <textarea id="melhorias" name="melhorias" placeholder="Descreva os pontos a melhorar..." required></textarea>
-
-      <label for="observacoes"><strong>Observações Finais:</strong></label>
-      <textarea id="observacoes" name="observacoes" placeholder="Insira observações adicionais..." required></textarea>
-
-      <div class="botoes">
-        <button type="submit" class="btn btn-relatorio">📄 Gerar Relatório PDF</button>
-        <a href="{{ url_for('index') }}" class="btn btn-home">🔙 Página Inicial</a>
-      </div>
-    </form>
+{% if show_user_dropdown %}
+<div class="user-dropdown">
+  <button class="user-button" onclick="toggleDropdown()">
+    {{ session['username'] }} ⌄
+  </button>
+  <div id="dropdown-content" class="dropdown-content">
+    <a href="{{ url_for('logout') }}">Logout</a>
   </div>
+</div>
+{% endif %}
 
-  <script>
-    document.getElementById('finalForm').addEventListener('submit', function (e) {
-      e.preventDefault();
+<div class="message">
+  <h2>All steps have been successfully completed! ✅</h2>
+  <p>Before generating the report, please enter the final information below:</p>
 
-      const melhorias = document.getElementById('melhorias').value.trim();
-      const observacoes = document.getElementById('observacoes').value.trim();
+  <form id="finalForm">
+    <label for="melhorias"><strong>Areas for Improvement:</strong></label>
+    <textarea id="melhorias" name="melhorias" placeholder="Describe areas that need improvement..." required></textarea>
 
-      if (!melhorias || !observacoes) {
-        alert("Por favor, preencha todos os campos.");
-        return;
+    <label for="observacoes"><strong>Final Remarks:</strong></label>
+    <textarea id="observacoes" name="observacoes" placeholder="Add any additional observations..." required></textarea>
+
+    <div class="buttons">
+      <button id="btnRelatorio" type="submit" class="btn btn-report">📄 Generate PDF Report</button>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-home">🔙 Home Page</a>
+    </div>
+
+    <div id="statusMsg"></div>
+  </form>
+</div>
+
+<script>
+  function toggleDropdown() {
+    document.getElementById("dropdown-content").classList.toggle("show");
+  }
+
+  window.addEventListener('click', function(event) {
+    if (!event.target.matches('.user-button')) {
+      const dropdowns = document.querySelectorAll(".dropdown-content");
+      dropdowns.forEach(d => d.classList.remove("show"));
+    }
+  });
+
+  const form = document.getElementById('finalForm');
+  const btnRelatorio = document.getElementById('btnRelatorio');
+  const statusMsg = document.getElementById('statusMsg');
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const melhorias = document.getElementById('melhorias').value.trim();
+    const observacoes = document.getElementById('observacoes').value.trim();
+
+    if (!melhorias || !observacoes) {
+      alert("Please fill in all fields.");
+      return;
+    }
+
+    btnRelatorio.disabled = true;
+    btnRelatorio.innerText = "⏳ Generating report...";
+    statusMsg.innerText = "Please wait... The report is being generated.";
+
+    fetch('/salvar_finalizacao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ melhorias, observacoes })
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(data => { throw new Error(data.erro || "Error saving the data."); });
       }
 
-      fetch('/salvar_finalizacao', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ melhorias, observacoes })
-      })
-      .then(response => {
-        if (!response.ok) {
-          return response.json().then(data => { throw new Error(data.erro || "Erro ao guardar os dados."); });
-        }
-        window.open("/incident/relatorio", "_blank");
-      })
-      .catch(error => {
-        alert("Erro: " + error.message);
-      });
+      window.open("/download_relatorio", "_blank");
+      statusMsg.innerText = "✅ Report generated! The download will start automatically.";
+      btnRelatorio.disabled = false;
+      btnRelatorio.innerText = "📄 Generate PDF Report";
+    })
+    .catch(error => {
+      btnRelatorio.disabled = false;
+      btnRelatorio.innerText = "📄 Generate PDF Report";
+      statusMsg.innerText = "";
+      alert("Error: " + error.message);
     });
-  </script>
+  });
+</script>
+
 </body>
 </html>
+

@@ -2,13 +2,14 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
+
 <div class="row justify-content-center">
     <div class="col-md-6">
         <div class="card-custom text-center p-4">
             <h2 class="mb-4">Plano de Resposta a Incidentes</h2>
             <form method="POST" action="{{ url_for('login') }}">
                 <div class="mb-3">
-                    <label for="username" class="form-label fw-bold w-100">Utilizador</label>
+                    <label for="username" class="form-label fw-bold w-100">User</label>
                     <input type="text"
                            id="username"
                            class="form-control rounded-pill mx-auto text-center"
@@ -18,7 +19,7 @@
                            style="max-width: 300px;">
                 </div>
                 <div class="mb-3">
-                    <label for="password" class="form-label fw-bold w-100">Senha</label>
+                    <label for="password" class="form-label fw-bold w-100">Password</label>
                     <input type="password"
                            id="password"
                            class="form-control rounded-pill mx-auto text-center"
@@ -27,11 +28,13 @@
                            aria-label="Senha"
                            style="max-width: 300px;">
                 </div>
+
                 {% if message %}
                     <div class="alert alert-danger mt-3" role="alert">
                         {{ message }}
                     </div>
                 {% endif %}
+
                 <div class="d-grid justify-content-center">
                     <button type="submit"
                             class="btn btn-purple"
@@ -40,8 +43,25 @@
                     </button>
                 </div>
             </form>
-            <p class="text-center mt-3 text-muted">Data atual: {{ data_atual }}</p>
+
+            <hr class="my-4">
+
+            <p class="text-center text-muted mb-0">Data atual: {{ data_atual }}</p>
+            <p class="text-center text-muted">Versão da aplicação: {{ versao }}</p>
         </div>
     </div>
 </div>
 {% endblock %}
+
+<script>
+     function toggleDropdown() {
+            document.getElementById("dropdown-content").classList.toggle("show");
+        }
+
+        window.addEventListener('click', function(event) {
+    if (!event.target.matches('.user-button')) {
+        const dropdowns = document.querySelectorAll(".dropdown-content");
+        dropdowns.forEach(d => d.classList.remove("show"));
+    }
+});
+</script>
