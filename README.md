@@ -1,0 +1,1 @@
+This repository contains an Incident Response Plan (IRP) structured by type of incident, with a focus on information security, business continuity and compliance with good practices (e.g. ISO 27001, NIST, GDPR)
