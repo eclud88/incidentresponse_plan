@@ -43,6 +43,15 @@ def login():
     else:
         return render_template('index.html', message="Utilizador ou senha inválidos.", data_atual=data_atual)
 
+
+@app.route('/dashboard')
+def dashboard():
+    incidentes = obter_incidentes_do_utilizador(current_user.id)
+    return render_template('dashboard.html', incidentes=incidentes)
+
+
+
+
 @app.route('/incident', methods=['GET', 'POST'])
 def incident():
     incidentes = carregar_incidentes()
@@ -141,12 +150,19 @@ def salvar_finalizacao():
         return {'erro': 'Formato JSON esperado'}, 400
 
     data = request.get_json()
+    evidencia = data.get('evidencia', '').strip()
+    passo = str(data.get('passo'))
+
     melhorias = data.get('melhorias', '').strip()
     observacoes = data.get('observacoes', '').strip()
 
     if not melhorias or not observacoes:
         return {'erro': 'Todos os campos devem ser preenchidos'}, 400
 
+    if 'evidencias' not in session:
+        session['evidencias'] = {}
+
+    session['evidencias'][passo] = evidencia
     session['licoes'] = {
         'melhorias': melhorias,
         'observacoes': observacoes
@@ -155,6 +171,8 @@ def salvar_finalizacao():
     session['fim'] = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
     session.modified = True
     return '', 204
+
+
 
 @app.route('/incident/finalizar', methods=['GET', 'POST'])
 def finalizar():
@@ -192,7 +210,7 @@ def relatorio():
     for idx, passo in enumerate(passos):
         evidencia = evidencias.get(str(idx), '').split('\n')
         pdf.set_font("Arial", 'B', 12)
-        pdf.multi_cell(0, 10, f"Passo {idx}: {passo}")
+        pdf.multi_cell(0, 10, f"Passo {idx + 1}: {passo}")
         pdf.set_font("Arial", '', 12)
         for linha in evidencia:
             pdf.cell(10)
@@ -217,7 +235,7 @@ def relatorio():
     pdf_stream = io.BytesIO(pdf_bytes)
 
     agora = datetime.now().strftime("%d-%m-%Y_%H%M%S")
-    nome_arquivo = f"relatorio_{agora}.pdf"
+    nome_arquivo = f"relatorio_{agora}_{tipo}.pdf"
 
     session.clear()  # limpar a sessão só depois de gerar
     return send_file(pdf_stream, mimetype='application/pdf', download_name=nome_arquivo, as_attachment=True)

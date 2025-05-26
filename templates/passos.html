@@ -32,18 +32,6 @@
           </button>
         </li>
         {% endfor %}
-        <li class="nav-item" role="presentation">
-          <button class="nav-link"
-                  id="tab-licoes"
-                  data-bs-toggle="tab"
-                  data-bs-target="#passo-licoes"
-                  type="button"
-                  role="tab"
-                  aria-controls="passo-licoes"
-                  aria-selected="false">
-            Lições Aprendidas
-          </button>
-        </li>
       </ul>
 
       <!-- Conteúdo das abas -->
@@ -72,30 +60,14 @@
             {% endif %}
 
             {% if not loop.last %}
-            <button class="btn btn-purple" onclick="avancarPasso({{ loop.index0 }})">Próximo Passo</button>
+            <button class="btn btn-secondary" id="btn-proximo-{{ loop.index0 }}"
+                    onclick="avancarPasso({{ loop.index0 }})" disabled>Próximo Passo</button>
             {% else %}
-            <button class="btn btn-purple" onclick="mostrarLicoes()">Próximo Passo</button>
+            <button class="btn btn-purple" id="btn-finalizar" onclick="finalizarPlano()" disabled>Finalizar Plano</button>
             {% endif %}
           </div>
         </div>
         {% endfor %}
-
-        <!-- Abas: Lições Aprendidas -->
-        <div class="tab-pane fade" id="passo-licoes" role="tabpanel" aria-labelledby="tab-licoes">
-
-          <label for="melhorias" class="form-label mt-3">Melhorias a implementar:</label>
-          <textarea id="melhorias" class="form-control mb-3" rows="4"
-                    placeholder="Descreva as melhorias sugeridas..." required></textarea>
-
-          <label for="observacoes" class="form-label">Observações Finais:</label>
-          <textarea id="observacoes" class="form-control mb-3" rows="4"
-                    placeholder="Outras observações relevantes..." required></textarea>
-
-          <div class="d-flex justify-content-between mt-4">
-            <button class="btn btn-secondary" onclick="voltarPasso('licoes')">Passo Anterior</button>
-            <button class="btn btn-purple" id="btn-finalizar" onclick="finalizarPlano()" disabled>Finalizar Plano</button>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -137,68 +109,81 @@
     }
   }
 
-  function mostrarLicoes() {
-    const ultimoIndice = {{ passos|length - 1 }};
-    const ultimaAba = document.getElementById(`tab-${ultimoIndice}`);
-    if (ultimaAba) {
-      ultimaAba.classList.add('bg-success', 'text-white');
-    }
-
-    const tabLicoes = document.getElementById("tab-licoes");
-    if (tabLicoes) {
-      new bootstrap.Tab(tabLicoes).show();
-    }
-  }
-
   function voltarPasso(indiceAtual) {
-    let anteriorBotao;
-
-    if (indiceAtual === 'licoes' || indiceAtual === {{ passos|length }}) {
-      anteriorBotao = document.getElementById(`tab-{{ passos|length - 1 }}`);
-    } else {
-      anteriorBotao = document.getElementById(`tab-${indiceAtual - 1}`);
-    }
-
+    const anteriorBotao = document.getElementById(`tab-${indiceAtual - 1}`);
     if (anteriorBotao) {
       new bootstrap.Tab(anteriorBotao).show();
     }
   }
 
   function finalizarPlano() {
-    const melhorias = document.getElementById("melhorias").value.trim();
-    const observacoes = document.getElementById("observacoes").value.trim();
+    const ultimoIndice = {{ passos|length - 1 }};
+    const textarea = document.getElementById(`evidencia-${ultimoIndice}`);
 
-    if (!melhorias || !observacoes) {
-      alert("Por favor, preencha todos os campos antes de finalizar.");
+    if (!textarea.value.trim()) {
+      alert('Por favor, preencha a evidência do último passo antes de finalizar.');
+      textarea.focus();
       return;
     }
 
-    fetch('/salvar_finalizacao', {
+    fetch('/incident/salvar_passo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ melhorias, observacoes })
+      body: JSON.stringify({
+        passo: ultimoIndice,
+        evidencia: textarea.value.trim()
+      })
     }).then(() => {
+      // Redireciona para página de finalização (com melhorias e observações)
       window.location.href = "/incident/finalizar";
     }).catch(() => {
-      alert("Erro ao salvar as lições aprendidas.");
+      alert("Erro ao finalizar o plano.");
     });
   }
 
-  // Ativa o botão "Finalizar" somente se os campos forem preenchidos
   document.addEventListener('DOMContentLoaded', function () {
-    const melhoriasInput = document.getElementById("melhorias");
-    const observacoesInput = document.getElementById("observacoes");
-    const btnFinalizar = document.getElementById("btn-finalizar");
+    const totalPassos = {{ passos|length }};
+    for (let i = 0; i < totalPassos; i++) {
+      const textarea = document.getElementById(`evidencia-${i}`);
 
-    function verificarCampos() {
-      btnFinalizar.disabled = !(melhoriasInput.value.trim() && observacoesInput.value.trim());
+      // Botões "Próximo Passo"
+      if (i < totalPassos - 1) {
+        const botaoProximo = document.getElementById(`btn-proximo-${i}`);
+
+        function verificarCampo() {
+          if (textarea.value.trim()) {
+            botaoProximo.disabled = false;
+            botaoProximo.classList.remove('btn-secondary');
+            botaoProximo.classList.add('btn-success');
+          } else {
+            botaoProximo.disabled = true;
+            botaoProximo.classList.remove('btn-success');
+            botaoProximo.classList.add('btn-secondary');
+          }
+        }
+
+        textarea.addEventListener('input', verificarCampo);
+        verificarCampo();
+      }
+
+      // Botão "Finalizar"
+      if (i === totalPassos - 1) {
+        const btnFinalizar = document.getElementById("btn-finalizar");
+
+        function verificarUltimoCampo() {
+          btnFinalizar.disabled = !textarea.value.trim();
+        }
+
+        textarea.addEventListener('input', verificarUltimoCampo);
+        verificarUltimoCampo();
+      }
     }
-
-    melhoriasInput.addEventListener('input', verificarCampos);
-    observacoesInput.addEventListener('input', verificarCampos);
   });
 </script>
 {% endblock %}
+
+
+
 
 
 
