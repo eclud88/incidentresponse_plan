@@ -6,23 +6,27 @@ import os
 import io
 import json
 
+
 app = Flask(__name__)
 app.secret_key = 'secret_key_1234'
 
-# Database configuration
+
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+
 db = SQLAlchemy(app)
+
 
 USERS = {
     'admin': 'senha123',
     'user': '123456'
 }
 
-INCIDENTS_PATH = os.path.join(basedir, 'incidentes.json')
-STEPS_PATH = os.path.join(basedir, 'passos_incidentes.json')
+
+INCIDENTS_PATH = os.path.join(basedir, 'incidents.json')
+STEPS_PATH = os.path.join(basedir, 'incident_steps.json')
 
 
 class Incident(db.Model):
@@ -32,6 +36,7 @@ class Incident(db.Model):
     status = db.Column(db.String(50), default='In Progress')
     improvements = db.Column(db.Text)
     observations = db.Column(db.Text)
+    start_datetime = db.Column(db.DateTime, nullable=True)
 
 
 def load_incidents():
@@ -44,6 +49,29 @@ def load_incident_steps():
         return json.load(f)
 
 
+@app.before_request
+def create_tables():
+    db.create_all()
+
+
+@app.route('/delete_incident/<int:id>', methods=['POST'])
+def delete_incident(id):
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    incident = Incident.query.get(id)
+    if not incident:
+        return jsonify({'error': 'Incident not found'}), 404
+
+    try:
+        db.session.delete(incident)
+        db.session.commit()
+        return jsonify({'status': 'Deleted'})
+    except Exception as e:
+        return jsonify({'error': 'Failed to delete incident'}), 500
+
+
 @app.route('/')
 def index():
     current_date = datetime.now().strftime('%d/%m/%Y')
@@ -53,8 +81,8 @@ def index():
 
 @app.route('/login', methods=['POST'])
 def login():
-    username = request.form['username']
-    password = request.form['password']
+    username = request.form.get('username')
+    password = request.form.get('password')
 
     if username in USERS and USERS[username] == password:
         session['username'] = username
@@ -62,21 +90,29 @@ def login():
     return redirect(url_for('index'))
 
 
-@app.route('/dashboard', methods=['GET'])
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
+
+
+@app.route('/dashboard')
 def dashboard():
     username = session.get('username')
+    if not username:
+        return redirect(url_for('index'))
+
     incidents = Incident.query.order_by(Incident.creation_date.desc()).all()
-    return render_template('dashboard.html', incidents=incidents, show_user_dropdown=True)
+    return render_template('dashboard.html', incidents=incidents, show_user_dropdown=True, username=username)
 
 
 @app.route('/incident', methods=['GET', 'POST'])
 def incident():
-    incidents = load_incidents()
-    incident_steps = load_incident_steps()
-    if isinstance(incident_steps[0], list):
-        incident_steps = incident_steps[0]
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('index'))
 
-    steps = []
+    incidents = load_incidents()
     selected_class = ''
     selected_type = ''
 
@@ -84,30 +120,33 @@ def incident():
         selected_class = request.form.get('class')
         selected_type = request.form.get('type')
 
-        session['class'] = selected_class
-        session['type'] = selected_type
-        session['start'] = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-
         if selected_class and selected_type:
-            return redirect(url_for('steps', selected_class=selected_class, selected_type=selected_type))
+            session['class'] = selected_class
+            session['type'] = selected_type
+            session['start'] = datetime.now()
+            return redirect(url_for('steps', class_=selected_class, type_=selected_type))
 
-    return render_template('incident.html', incidents=incidents, steps=steps, selected_class=selected_class, selected_type=selected_type, show_user_dropdown=True)
+    return render_template('incident.html', incidents=incidents, class_=selected_class, type=selected_type, show_user_dropdown=True)
 
 
 @app.route('/incident/steps', methods=['GET', 'POST'])
 def steps():
-    session['record_start'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('index'))
+
     incident_steps = load_incident_steps()
 
     if isinstance(incident_steps, list) and len(incident_steps) == 1 and isinstance(incident_steps[0], list):
         incident_steps = incident_steps[0]
 
     if request.method == 'GET':
-        class_req = request.args.get('class')
-        type_req = request.args.get('type')
+        class_req = request.args.get('class_')
+        type_req = request.args.get('type_')
     else:
-        class_req = request.form.get('class') or (request.get_json() or {}).get('class')
-        type_req = request.form.get('type') or (request.get_json() or {}).get('type')
+        json_data = request.get_json(silent=True) or {}
+        class_req = request.form.get('class') or json_data.get('class')
+        type_req = request.form.get('type') or json_data.get('type')
 
     if not class_req or not type_req:
         return abort(400, description="Parameters 'class' and 'type' are required.")
@@ -128,12 +167,18 @@ def steps():
     session['class'] = class_req
     session['type'] = type_req
     session['steps'] = found_steps
+    session['start'] = session.get('start') or datetime.now()
+    session.modified = True
 
-    return render_template('steps.html', steps=found_steps, selected_class=class_req, selected_type=type_req, show_user_dropdown=True)
+    return render_template('steps.html', steps=found_steps, class_=class_req, type=type_req, show_user_dropdown=True)
 
 
 @app.route('/incident/save_step', methods=['POST'])
 def save_step():
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'Unauthorized'}), 401
+
     data = request.get_json()
     step_index = str(data.get('step'))
     evidence = data.get('evidence', '').strip()
@@ -146,84 +191,94 @@ def save_step():
 
     session['evidences'][step_index] = evidence
     session.modified = True
-    return {'status': 'ok'}
+    return jsonify({'status': 'ok'})
 
 
 @app.route('/save_completion', methods=['POST'])
 def save_completion():
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'Unauthorized'}), 401
+
     if not request.is_json:
-        return {'error': 'JSON format expected'}, 400
+        return jsonify({'error': 'JSON format expected'}), 400
 
     data = request.get_json()
-    evidence = data.get('evidence', '').strip()
-    step = str(data.get('step'))
-
     improvements = data.get('improvements', '').strip()
     observations = data.get('observations', '').strip()
+    incident_id = data.get('id')
 
     if not improvements or not observations:
-        return {'error': 'All fields must be filled'}, 400
+        return jsonify({'error': 'All fields must be filled'}), 400
 
-    if 'evidences' not in session:
-        session['evidences'] = {}
+    start_time = session.get('start')
 
-    session['evidences'][step] = evidence
+    if not start_time:
+        start_time = datetime.now()
+
+    if isinstance(start_time, str):
+        try:
+            start_time = datetime.strptime(start_time, '%d/%m/%Y %H:%M:%S')
+        except:
+            start_time = datetime.now()
+
+    session['end'] = datetime.now()
     session['lessons'] = {'improvements': improvements, 'observations': observations}
-    session['end'] = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
     session.modified = True
-    return '', 204
 
-
-@app.route('/incident/complete', methods=['GET', 'POST'])
-def complete():
-    return render_template('complete.html')
-
-
-@app.route('/incident/report')
-def report():
     incident_class = session.get('class', 'N/A')
     incident_type = session.get('type', 'N/A')
-    steps = session.get('steps', [])
-    evidences = session.get('evidences', {})
-    record_start = session.get('record_start', 'N/A')
-    end_time = session.get('end', datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
-    lessons = session.get('lessons', {})
-
-    improvements = lessons.get('improvements', '')
-    observations = lessons.get('observations', '')
 
     new_incident = Incident(
         name=f"{incident_class} - {incident_type}",
         creation_date=datetime.now(),
         status="Completed",
         improvements=improvements,
-        observations=observations
+        observations=observations,
+        start_datetime=start_time
     )
     db.session.add(new_incident)
     db.session.commit()
 
-    session['report_ready'] = True
-    session['report_data'] = {
-        'class': incident_class,
-        'type': incident_type,
-        'steps': steps,
-        'evidences': evidences,
-        'record_start': record_start,
-        'end': end_time,
-        'improvements': improvements,
-        'observations': observations
-    }
+    session['incident_id'] = new_incident.id
 
-    return redirect(url_for('dashboard'))
+    return '', 204
+
+
+@app.route('/incident/complete')
+def complete():
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('index'))
+
+    incident_id = session.get('incident_id')
+    if not incident_id:
+        return "Incident ID not found in session", 400
+
+    return render_template('complete.html', show_user_dropdown=True, incident_id=incident_id)
 
 
 @app.route('/download_report')
 def download_report():
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('index'))
+
     data = session.get('report_data')
     if not data:
         return redirect(url_for('dashboard'))
 
-    pdf = FPDF()
+    class PDF(FPDF):
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('Arial', 'I', 8)
+            self.cell(0, 10, 'This report was automatically generated by this App', align='L')
+            self.set_y(-15)
+            self.set_x(-40)
+            self.cell(0, 10, f'Página {self.page_no()} de {{nb}}', align='R')
+
+    pdf = PDF()
+    pdf.alias_nb_pages()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
@@ -232,70 +287,57 @@ def download_report():
     pdf.ln(10)
 
     pdf.set_font("Arial", '', 12)
-    pdf.cell(0, 10, f"Incident Class: {data['class']}", ln=True)
-    pdf.cell(0, 10, f"Incident Type: {data['type']}", ln=True)
-    pdf.cell(0, 10, f"Start Time: {data['record_start']}", ln=True)
-    pdf.cell(0, 10, f"End Time: {data['end']}", ln=True)
+    pdf.cell(0, 10, f"Incident Class: {data.get('class', 'N/A')}", ln=True)
+    pdf.cell(0, 10, f"Incident Type: {data.get('type', 'N/A')}", ln=True)
+
+    # Datas
+    start_dt = session.get('start')
+    start_str = datetime.strptime(start_dt, '%Y-%m-%d %H:%M:%S').strftime('%d/%m/%Y %H:%M:%S') if isinstance(start_dt, str) else str(start_dt)
+    pdf.cell(0, 10, f"Start Time: {start_str}", ln=True)
+
+    end_dt = session.get('end')
+    end_str = datetime.strptime(end_dt, '%Y-%m-%d %H:%M:%S').strftime('%d/%m/%Y %H:%M:%S') if isinstance(end_dt, str) else str(end_dt)
+    pdf.cell(0, 10, f"End Time: {end_str}", ln=True)
+
     pdf.ln(10)
 
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, "Executed Steps:", ln=True)
+    pdf.cell(0, 10, "Executed Steps", ln=True)
     pdf.ln(5)
 
-    for idx, step in enumerate(data['steps']):
-        evidence_lines = data['evidences'].get(str(idx), '').split('\n')
+    for idx, step in enumerate(data.get('steps', [])):
+        evidences = data.get('evidences', {})
+        evidence_text = evidences.get(str(idx), '')
+        evidence_lines = evidence_text.split('\n')
+
         pdf.set_font("Arial", 'B', 12)
         pdf.multi_cell(0, 10, f"Step {idx + 1}: {step}")
         pdf.set_font("Arial", '', 12)
         for line in evidence_lines:
-            pdf.cell(10)
-            pdf.cell(0, 10, f"- {line.strip()}", ln=True)
+            pdf.multi_cell(0, 8, f"  Evidence: {line}")
         pdf.ln(3)
 
-    pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, "Lessons Learned:", ln=True)
-    pdf.set_font("Arial", '', 12)
-    pdf.multi_cell(0, 10, f"Improvements: {data['improvements']}")
-    pdf.multi_cell(0, 10, f"Observations: {data['observations']}")
     pdf.ln(10)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, "Lessons Learned", ln=True)
+    pdf.ln(5)
+    pdf.set_font("Arial", '', 12)
+    lessons = session.get('lessons', {})
+    improvements = lessons.get('improvements', '')
+    observations = lessons.get('observations', '')
+    pdf.multi_cell(0, 10, f"Improvements:\n{improvements}")
+    pdf.ln(5)
+    pdf.multi_cell(0, 10, f"Observations:\n{observations}")
 
-    pdf.set_y(-30)
-    pdf.set_font("Arial", 'I', 10)
-    today = datetime.now().strftime('%d/%m/%Y')
-    pdf.cell(0, 10, f"This report was generated automatically on {today}.", align="L")
-    pdf.cell(0, 10, f"Page {pdf.page_no()}", align="R")
+    current_date = datetime.now().strftime('%d-%m-%Y')
+    incident_type = data.get('type', 'incident').replace(' ', '_').lower()
+    filename = f"report_{current_date}_{incident_type}.pdf"
 
-    pdf_bytes = pdf.output(dest='S').encode('latin-1')
-    pdf_stream = io.BytesIO(pdf_bytes)
-    now_str = datetime.now().strftime("%d-%m-%Y_%H%M%S")
-    filename = f"report_{now_str}_{data['type']}.pdf"
+    pdf_output = pdf.output(dest='S').encode('latin1')
+    pdf_buffer = io.BytesIO(pdf_output)
+    pdf_buffer.seek(0)
 
-    session.pop('report_ready', None)
-    session.pop('report_data', None)
-
-    return send_file(pdf_stream, mimetype='application/pdf', download_name=filename, as_attachment=True)
-
-
-@app.before_request
-def create_tables():
-    db.create_all()
-
-
-@app.route('/delete_incident/<int:id>', methods=['POST'])
-def delete_incident(id):
-    try:
-        incident = Incident.query.get_or_404(id)
-        db.session.delete(incident)
-        db.session.commit()
-        return '', 200
-    except:
-        return jsonify({'error': 'Failed to delete'}), 400
-
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('index'))
+    return send_file(pdf_buffer, download_name=filename, as_attachment=True)
 
 
 if __name__ == '__main__':

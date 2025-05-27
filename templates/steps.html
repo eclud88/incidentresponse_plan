@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+{% block title %}Response Plan{% endblock %}
+
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-md-10">
+    <div class="card-custom p-4">
+      <h3 class="mb-3 text-center">Incident Response Plan</h3>
+
+      {% if class and type %}
+      <div class="mb-4 text-center">
+        <h5>
+          Incident Class: {{ class }}<br>
+          Incident Type: {{ type }}
+        </h5>
+      </div>
+      {% endif %}
+
+      <!-- Tabs -->
+      <ul class="nav nav-tabs" id="stepsTab" role="tablist">
+        {% for step in steps %}
+        <li class="nav-item" role="presentation">
+          <button class="nav-link {% if loop.first %}active{% endif %}"
+                  id="tab-{{ loop.index0 }}"
+                  data-bs-toggle="tab"
+                  data-bs-target="#step-{{ loop.index0 }}"
+                  type="button"
+                  role="tab"
+                  aria-controls="step-{{ loop.index0 }}"
+                  aria-selected="{{ 'true' if loop.first else 'false' }}">
+            Step {{ loop.index }}
+          </button>
+        </li>
+        {% endfor %}
+      </ul>
+
+      <!-- Tab Content -->
+      <div class="tab-content mt-3" id="stepsTabContent">
+        {% for step in steps %}
+        <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
+             id="step-{{ loop.index0 }}"
+             role="tabpanel"
+             aria-labelledby="tab-{{ loop.index0 }}">
+
+          <p class="fw-semibold">{{ step }}</p>
+
+          <label for="evidence-{{ loop.index0 }}" class="form-label">Evidence(s):</label>
+          <textarea id="evidence-{{ loop.index0 }}" class="form-control mb-3" rows="4"
+                    placeholder="Describe the evidence(s)..." required></textarea>
+
+          <label for="file-{{ loop.index0 }}" class="form-label">Attach File:</label>
+          <input type="file" class="form-control mb-3" id="file-{{ loop.index0 }}"
+                 onchange="updateIncident({{ loop.index0 }})">
+
+          <div class="d-flex justify-content-between mt-4">
+            {% if not loop.first %}
+            <button class="btn btn-secondary" onclick="goBackStep({{ loop.index0 }})">Previous Step</button>
+            {% else %}
+            <span></span>
+            {% endif %}
+
+            {% if not loop.last %}
+            <button class="btn btn-secondary" id="btn-next-{{ loop.index0 }}"
+                    onclick="nextStep({{ loop.index0 }})" disabled>Next Step</button>
+            {% else %}
+            <button class="btn btn-purple" id="btn-finish" onclick="finishPlan()" disabled>Finish Plan</button>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function toggleDropdown() {
+    document.getElementById("dropdown-content").classList.toggle("show");
+  }
+
+  window.addEventListener('click', function(event) {
+    if (!event.target.matches('.user-button')) {
+      const dropdowns = document.querySelectorAll(".dropdown-content");
+      dropdowns.forEach(d => d.classList.remove("show"));
+    }
+  });
+
+  function updateIncident(index) {
+    console.log(`File updated in step ${index}`);
+  }
+
+  async function nextStep(currentIndex) {
+    const textarea = document.getElementById(`evidence-${currentIndex}`);
+    if (!textarea.value.trim()) {
+      alert('Please fill in the evidence before continuing.');
+      textarea.focus();
+      return;
+    }
+
+    try {
+      await fetch("/incident/save_step", {
+        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step: currentIndex,
+          evidence: textarea.value.trim()
+        })
+      });
+
+      const currentTab = document.getElementById(`tab-${currentIndex}`);
+      currentTab.classList.add('bg-success', 'text-white');
+
+      const nextTab = document.getElementById(`tab-${currentIndex + 1}`);
+      if (nextTab) {
+        new bootstrap.Tab(nextTab).show();
+      }
+    } catch (err) {
+      alert('Error saving the step. Please try again.');
+    }
+  }
+
+  function goBackStep(currentIndex) {
+    const prevTab = document.getElementById(`tab-${currentIndex - 1}`);
+    if (prevTab) {
+      new bootstrap.Tab(prevTab).show();
+    }
+  }
+
+  function finishPlan() {
+    const lastIndex = {{ steps|length - 1 }};
+    const textarea = document.getElementById(`evidence-${lastIndex}`);
+
+    if (!textarea.value.trim()) {
+      alert('Please fill in the evidence for the last step before finishing.');
+      textarea.focus();
+      return;
+    }
+
+    fetch('/incident/save_step', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        step: lastIndex,
+        evidence: textarea.value.trim()
+      })
+    }).then(() => {
+      window.location.href = "/incident/complete";
+    }).catch(() => {
+      alert("Error finishing the plan.");
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const totalSteps = {{ steps|length }};
+    for (let i = 0; i < totalSteps; i++) {
+      const textarea = document.getElementById(`evidence-${i}`);
+
+      if (i < totalSteps - 1) {
+        const nextButton = document.getElementById(`btn-next-${i}`);
+
+        function checkField() {
+          if (textarea.value.trim()) {
+            nextButton.disabled = false;
+            nextButton.classList.remove('btn-secondary');
+            nextButton.classList.add('btn-success');
+          } else {
+            nextButton.disabled = true;
+            nextButton.classList.remove('btn-success');
+            nextButton.classList.add('btn-secondary');
+          }
+        }
+
+        textarea.addEventListener('input', checkField);
+        checkField();
+      }
+
+      if (i === totalSteps - 1) {
+        const finishButton = document.getElementById("btn-finish");
+
+        function checkLastField() {
+          finishButton.disabled = !textarea.value.trim();
+        }
+
+        textarea.addEventListener('input', checkLastField);
+        checkLastField();
+      }
+    }
+  });
+</script>
+{% endblock %}
+

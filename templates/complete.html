@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}Process Completed{% endblock %}
+
+{% block content %}
+<div class="card card-custom mx-auto" style="max-width: 600px;">
+  <h2 class="mb-4 text-success text-center">All steps have been successfully completed! ✅</h2>
+  <p class="text-center mb-4">Before generating the report, please enter the final information below:</p>
+
+  <form id="finalForm" novalidate>
+    <div class="mb-3">
+      <label for="improvements" class="form-label fw-bold">Areas for Improvement:</label>
+      <textarea id="improvements" name="improvements" class="form-control" rows="3" placeholder="Describe areas that need improvement..." required></textarea>
+    </div>
+
+    <div class="mb-3">
+      <label for="observations" class="form-label fw-bold">Final Remarks:</label>
+      <textarea id="observations" name="observations" class="form-control" rows="3" placeholder="Add any additional observations..." required></textarea>
+    </div>
+
+    <div class="d-flex justify-content-center gap-3 flex-wrap">
+      <button id="btnReport" type="submit" class="btn btn-success fw-bold">
+        📄 Generate PDF Report
+      </button>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-purple fw-bold">
+        🔙 Home Page
+      </a>
+    </div>
+
+    <div id="statusMsg" class="mt-3 text-center fw-semibold text-success"></div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+
+    function toggleDropdown() {
+      document.getElementById("dropdown-content").classList.toggle("show");
+    }
+
+    window.addEventListener('click', function(event) {
+      if (!event.target.matches('.user-button')) {
+        const dropdowns = document.querySelectorAll(".dropdown-content");
+        dropdowns.forEach(d => d.classList.remove("show"));
+      }
+    });
+
+    const form = document.getElementById('finalForm');
+    const btnReport = document.getElementById('btnReport');
+    const statusMsg = document.getElementById('statusMsg');
+
+    if (!form || !btnReport || !statusMsg) {
+      console.error("Form or buttons not found on DOM.");
+      return;
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      const improvements = document.getElementById('improvements').value.trim();
+      const observations = document.getElementById('observations').value.trim();
+
+      if (!improvements || !observations) {
+        alert("Please, fill in all the fields.");
+        return;
+      }
+
+      btnReport.disabled = true;
+      btnReport.innerText = "⏳ Generating Report...";
+      statusMsg.innerText = "Please, wait a moment...";
+
+      fetch('/save_completion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ improvements, observations })
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(data => {
+            throw new Error(data.error || "Error when saving data.");
+          });
+        }
+
+        window.open("/download_report", "_blank");
+
+        statusMsg.innerText = "✅ Report generated! The download will start automatically.";
+        btnReport.disabled = false;
+        btnReport.innerText = "📄 Generate PDF Report";
+      })
+      .catch(error => {
+        btnReport.disabled = false;
+        btnReport.innerText = "📄 Generate PDF Report";
+        statusMsg.innerText = "";
+        alert("Error: " + error.message);
+      });
+    });
+
+  });
+</script>
+
+{% endblock %}
+
+

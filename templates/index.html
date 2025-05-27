@@ -6,7 +6,7 @@
 <div class="row justify-content-center">
     <div class="col-md-6">
         <div class="card-custom text-center p-4">
-            <h2 class="mb-4">Plano de Resposta a Incidentes</h2>
+            <h2 class="mb-4">Incident Response Plan</h2>
             <form method="POST" action="{{ url_for('login') }}">
                 <div class="mb-3">
                     <label for="username" class="form-label fw-bold w-100">User</label>
@@ -36,18 +36,19 @@
                 {% endif %}
 
                 <div class="d-grid justify-content-center">
-                    <button type="submit"
-                            class="btn btn-purple"
-                            style="width: 300px;">
-                        Entrar
-                    </button>
-                </div>
+  <button type="submit"
+          class="btn btn-purple"
+          style="width: 180px; height: 50px; font-size: 18px; border-radius: 30px;">
+    Sign In
+  </button>
+</div>
+
             </form>
 
             <hr class="my-4">
 
-            <p class="text-center text-muted mb-0">Data atual: {{ data_atual }}</p>
-            <p class="text-center text-muted">Versão da aplicação: {{ versao }}</p>
+            <p class="text-center text-muted mb-0">Current Date: {{ current_date }}</p>
+            <p class="text-center text-muted">Application Version: {{ version }}</p>
         </div>
     </div>
 </div>

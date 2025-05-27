@@ -83,12 +83,13 @@
 
 {% if show_user_dropdown %}
     <div class="user-dropdown">
-        <button class="user-button" onclick="toggleDropdown()">
-            {{ session['username'] }} ⌄
-        </button>
-        <div id="dropdown-content" class="dropdown-content">
-            <a href="{{ url_for('logout') }}">Logout</a>
-        </div>
+        <button class="user-button" onclick="toggleDropdown()" aria-haspopup="true" aria-expanded="false">
+    {{ session['username'] }} ⌄
+</button>
+<div id="dropdown-content" class="dropdown-content" role="menu" aria-label="User menu">
+    <a href="{{ url_for('logout') }}" role="menuitem">Logout</a>
+</div>
+
     </div>
 {% endif %}
 
@@ -100,8 +101,12 @@
 
     <script>
         function toggleDropdown() {
-            document.getElementById("dropdown-content").classList.toggle("show");
-        }
+    const dropdown = document.getElementById("dropdown-content");
+    const isShown = dropdown.classList.toggle("show");
+    const btn = document.querySelector('.user-button');
+    btn.setAttribute('aria-expanded', isShown);
+}
+
 
         window.addEventListener('click', function(event) {
             if (!event.target.matches('.user-button')) {

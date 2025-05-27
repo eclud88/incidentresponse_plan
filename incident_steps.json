@@ -1,0 +1,440 @@
+[
+  {
+    "class": "Malicious Code",
+    "types": [
+      {
+        "type": "Infected System",
+        "steps": [
+          "Identify and isolate the compromised system to prevent further spread.",
+          "Collect and preserve forensic evidence for analysis.",
+          "Eradicate malware using appropriate tools and techniques.",
+          "Apply security patches and updates to the system.",
+          "Monitor the system post-remediation to ensure stability."
+        ]
+      },
+      {
+        "type": "Malware Distribution",
+        "steps": [
+          "Detect the distribution vector and scope of the malware.",
+          "Block malicious domains, IPs, and email addresses involved.",
+          "Notify affected parties and provide guidance on mitigation.",
+          "Remove malware from affected systems and networks.",
+          "Review and update security measures to prevent recurrence."
+        ]
+      },
+      {
+        "type": "C2 Server",
+        "steps": [
+          "Identify communication with Command and Control (C2) servers.",
+          "Isolate affected systems to disrupt malicious communication.",
+          "Block C2 server addresses at the network perimeter.",
+          "Analyze malware behavior and communication patterns.",
+          "Implement detection rules to identify future C2 activities."
+        ]
+      },
+      {
+        "type": "Malware Configuration",
+        "steps": [
+          "Analyze malware configuration to understand its behavior.",
+          "Identify and disable persistence mechanisms.",
+          "Restore affected systems to a known good state.",
+          "Update security tools to detect similar configurations.",
+          "Educate users on avoiding malware infections."
+        ]
+      }
+    ]
+  },
+  {
+    "class": "Availability",
+    "types": [
+      {
+        "type": "Denial of Service",
+        "steps": [
+          "Detect and analyze the nature of the DoS attack.",
+          "Implement rate limiting and filtering to mitigate the attack.",
+          "Engage with Internet Service Providers for support.",
+          "Monitor network traffic for ongoing threats.",
+          "Review and strengthen network infrastructure resilience."
+        ]
+      },
+      {
+        "type": "Distributed Denial of Service",
+        "steps": [
+          "Identify the scale and sources of the DDoS attack.",
+          "Activate DDoS mitigation services or appliances.",
+          "Coordinate with upstream providers to filter traffic.",
+          "Implement access controls to limit exposure.",
+          "Conduct a post-incident analysis to improve defenses."
+        ]
+      },
+      {
+        "type": "Misconfiguration",
+        "steps": [
+          "Detect and document the misconfiguration issue.",
+          "Revert to previous known good configurations.",
+          "Apply proper configuration settings as per best practices.",
+          "Validate system functionality post-correction.",
+          "Implement configuration management controls."
+        ]
+      },
+      {
+        "type": "Sabotage",
+        "steps": [
+          "Identify indicators of intentional disruption.",
+          "Isolate affected systems to prevent further damage.",
+          "Engage legal and human resources departments as needed.",
+          "Restore systems from trusted backups.",
+          "Review and enhance insider threat detection mechanisms."
+        ]
+      },
+      {
+        "type": "Outage",
+        "steps": [
+          "Determine the cause and scope of the outage.",
+          "Implement contingency plans to maintain operations.",
+          "Restore services using backup systems or resources.",
+          "Communicate status updates to stakeholders.",
+          "Analyze the incident to prevent future occurrences."
+        ]
+      }
+    ]
+  },
+  {
+    "class": "Information Gathering",
+    "types": [
+      {
+        "type": "Scanning",
+        "steps": [
+          "Detect scanning activities through logs and alerts.",
+          "Identify source IP addresses and scan patterns.",
+          "Block or rate-limit suspicious IPs at the firewall.",
+          "Monitor for signs of exploitation following scans.",
+          "Update intrusion detection systems with new signatures."
+        ]
+      },
+      {
+        "type": "Sniffing",
+        "steps": [
+          "Identify unauthorized packet capturing on the network.",
+          "Locate and remove rogue sniffing devices.",
+          "Encrypt sensitive network traffic to prevent interception.",
+          "Implement network segmentation to limit exposure.",
+          "Conduct regular audits to detect sniffing activities."
+        ]
+      },
+      {
+        "type": "Social Engineering",
+        "steps": [
+          "Educate users to recognize and report social engineering attempts.",
+          "Implement multi-factor authentication to reduce risk.",
+          "Monitor for unusual access patterns or requests.",
+          "Investigate reported incidents promptly.",
+          "Update security awareness training regularly."
+        ]
+      }
+    ]
+  },
+  {
+    "class": "Intrusion",
+    "types": [
+      {
+        "type": "Privileged Account Compromise",
+        "steps": [
+          "Detect unauthorized use of privileged accounts.",
+          "Immediately disable compromised accounts.",
+          "Investigate the method of compromise.",
+          "Reset credentials and review access permissions.",
+          "Implement stricter access controls and monitoring."
+        ]
+      },
+      {
+        "type": "Non-Privileged Account Compromise",
+        "steps": [
+          "Identify signs of unauthorized access to user accounts.",
+          "Force password resets for affected accounts.",
+          "Analyze logs to determine the breach source.",
+          "Educate users on secure password practices.",
+          "Enhance login monitoring and alerting mechanisms."
+        ]
+      },
+      {
+        "type": "Application Compromise",
+        "steps": [
+          "Detect anomalies indicating application compromise.",
+          "Isolate affected applications from the network.",
+          "Patch vulnerabilities exploited during the attack.",
+          "Restore applications from secure backups.",
+          "Conduct code reviews to identify security weaknesses."
+        ]
+      },
+      {
+        "type": "System Compromise",
+        "steps": [
+          "Identify compromised systems through alerts and logs.",
+          "Disconnect affected systems to prevent spread.",
+          "Perform forensic analysis to understand the breach.",
+          "Rebuild systems using clean images.",
+          "Implement continuous monitoring for future threats."
+        ]
+      },
+      {
+        "type": "Break-In",
+        "steps": [
+          "Detect unauthorized access to systems or facilities.",
+          "Secure entry points and assess damage.",
+          "Engage law enforcement if necessary.",
+          "Review and enhance physical and cyber security measures.",
+          "Educate staff on security protocols."
+        ]
+      }
+    ]
+  },
+  {
+    "class": "Intrusion Attempt",
+    "types": [
+      {
+        "type": "Vulnerability Exploitation",
+        "steps": [
+          "Monitor for signs of exploitation attempts.",
+          "Apply patches to known vulnerabilities promptly.",
+          "Implement intrusion prevention systems.",
+          "Conduct vulnerability assessments regularly.",
+          "Educate developers on secure coding practices."
+        ]
+      },
+      {
+        "type": "Login Attempt",
+        "steps": [
+          "Detect and log failed login attempts.",
+          "Implement account lockout policies after multiple failures.",
+          "Use CAPTCHA to prevent automated login attempts.",
+          "Monitor for credential stuffing activities.",
+          "Encourage users to use strong, unique passwords."
+        ]
+      },
+      {
+        "type": "New Attack Signature",
+        "steps": [
+          "Identify and analyze new attack patterns.",
+          "Update security systems with new signatures.",
+          "Share threat intelligence with relevant parties.",
+          "Monitor for similar attack vectors.",
+          "Review and adjust security policies accordingly."
+        ]
+      }
+    ]
+  },
+  {
+    "class": "Information Security",
+    "types": [
+      {
+        "type": "Unauthorized Access",
+        "steps": [
+          "Detect unauthorized access attempts or breaches.",
+          "Revoke unauthorized access and reset credentials.",
+          "Investigate the source and method of access.",
+          "Enhance access controls and authentication mechanisms.",
+          "Conduct user training on security best practices."
+        ]
+      },
+      {
+        "type": "Unauthorized Modification",
+        "steps": [
+          "Identify unauthorized changes to systems or data.",
+          "Restore data from backups to a known good state.",
+          "Determine how the modification occurred.",
+          "Implement change management controls.",
+          "Monitor for future unauthorized changes."
+        ]
+      },
+      {
+        "type": "Data Loss",
+        "steps": [
+          "Assess the extent and impact of data loss.",
+          "Recover lost data from backups if available.",
+          "Identify the cause of data loss.",
+          "Implement data loss prevention measures.",
+          "Review and update data handling policies."
+        ]
+      },
+      {
+        "type": "Information Exfiltration",
+        "steps": [
+          "Detect unusual data transfer activities.",
+          "Identify and isolate systems involved in exfiltration.",
+          "Determine the data that was exfiltrated.",
+          "Notify affected parties and authorities as required.",
+          "Strengthen data security and monitoring controls."
+        ]
+      }
+    ]
+  },
+  {
+    "class": "Fraud",
+    "types": [
+      {
+        "type": "Misuse or Unauthorized Use of Resources",
+        "steps": [
+          "Monitor for unusual resource usage patterns.",
+          "Investigate and confirm unauthorized use.",
+          "Terminate unauthorized activities and access.",
+          "Implement usage policies and monitoring tools.",
+          "Educate users on acceptable use policies."
+        ]
+      },
+      {
+        "type": "Copyright Infringement",
+        "steps": [
+          "Identify unauthorized use of copyrighted materials.",
+          "Remove infringing content promptly.",
+          "Notify involved parties of the infringement.",
+          "Implement content monitoring systems.",
+          "Educate users on intellectual property rights."
+        ]
+      },
+      {
+        "type": "Illegitimate Use of Third-Party Name",
+        "steps": [
+          "Detect unauthorized use of third-party identities.",
+          "Cease the illegitimate use immediately.",
+          "Notify the affected third parties.",
+          "Investigate the source and intent of misuse.",
+          "Implement controls to prevent future occurrences."
+        ]
+      },
+      {
+        "type": "Phishing",
+        "steps": [
+          "Identify and block phishing attempts.",
+          "Alert users to ongoing phishing campaigns.",
+          "Analyze phishing emails for indicators of compromise.",
+          "Update email filters and security protocols.",
+          "Conduct phishing awareness training for users."
+        ]
+      }
+    ]
+  },
+  {
+    "class": "Abusive Content",
+    "types": [
+      {
+        "type": "SPAM",
+        "steps": [
+          "Detect and filter spam messages.",
+          "Block IP addresses and domains sending spam.",
+          "Educate users on identifying and reporting spam.",
+          "Implement email authentication protocols.",
+          "Monitor for changes in spam patterns."
+        ]
+      },
+      {
+        "type": "Hate Speech",
+        "steps": [
+          "Identify content containing hate speech.",
+          "Remove offensive content promptly.",
+          "Enforce community guidelines and policies.",
+          "Report incidents to appropriate authorities.",
+          "Promote awareness and education on respectful communication."
+        ]
+      },
+      {
+      "type": "Sexual Exploitation of Minors, Racism, and Incitement to Violence",
+      "steps": [
+        "Detect and isolate illegal or harmful content.",
+        "Report immediately to competent authorities.",
+        "Remove content and block involved users.",
+        "Cooperate with legal investigations.",
+        "Implement automatic detection systems.",
+        "Conduct awareness and prevention campaigns."
+      ]
+    }
+  ]
+},
+{
+  "class": "Vulnerability",
+  "types": [
+    {
+      "type": "Weak Encryption",
+      "steps": [
+        "Identify systems using obsolete encryption algorithms.",
+        "Assess risk and potential impact.",
+        "Update or replace algorithms with modern standards.",
+        "Test implementation and validate security.",
+        "Monitor for new cryptographic vulnerabilities.",
+        "Document changes and communicate stakeholders."
+      ]
+    },
+    {
+      "type": "DDoS Amplifier",
+      "steps": [
+        "Detect anomalous traffic suggesting amplifier use.",
+        "Implement filters to block malicious traffic.",
+        "Update rules on network devices and firewalls.",
+        "Monitor environment for new attack vectors.",
+        "Review and reinforce network security policies.",
+        "Document incidents and response actions."
+      ]
+    },
+    {
+      "type": "Potentially Undesired Accessible Services",
+      "steps": [
+        "Inventory exposed non-essential services.",
+        "Assess risks of undue exposure.",
+        "Disable or restrict access to unnecessary services.",
+        "Apply strict access controls and monitoring.",
+        "Regularly test security of remaining services.",
+        "Update service management procedures."
+      ]
+    },
+    {
+      "type": "Information Disclosure",
+      "steps": [
+        "Identify source and extent of exposed information.",
+        "Isolate and block leakage channels.",
+        "Assess impact and notify affected parties.",
+        "Implement prevention and monitoring controls.",
+        "Conduct security audits and awareness.",
+        "Document and review data protection procedures."
+      ]
+    },
+    {
+      "type": "Vulnerable System",
+      "steps": [
+        "Detect systems with known vulnerabilities.",
+        "Apply security patches and updates immediately.",
+        "Conduct penetration tests and continuous assessments.",
+        "Isolate compromised systems until fully mitigated.",
+        "Monitor environment for exploitation signs.",
+        "Keep documentation updated and train teams."
+      ]
+    }
+  ]
+},
+{
+  "class": "Other",
+  "types": [
+    {
+      "type": "No Type",
+      "steps": [
+        "Collect maximum information about the incident.",
+        "Start preliminary analysis for correct classification.",
+        "Isolate affected systems or users as necessary.",
+        "Consult experts for response guidance.",
+        "Implement temporary actions for mitigation.",
+        "Update documentation and review classifications."
+      ]
+    },
+    {
+      "type": "Undetermined",
+      "steps": [
+        "Record all symptoms and available evidence.",
+        "Investigate using multiple tools and sources.",
+        "Consult multidisciplinary teams for diagnosis.",
+        "Implement provisional containment controls.",
+        "Monitor closely for incident evolution.",
+        "Document processes and prepare final report."
+      ]
+    }
+  ]
+}
+]
