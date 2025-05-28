@@ -2,67 +2,119 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
+<style>
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f3f4f6;
+    color: #1f2937;
+  }
+
+  .card-custom {
+    background-color: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    padding: 40px;
+  }
+
+  .card-custom h2 {
+    color: #6b00c2;
+    font-weight: 600;
+  }
+
+  .form-label {
+    font-weight: 600;
+    color: #374151;
+  }
+
+  .form-control {
+    border-radius: 30px;
+    border: 1px solid #d1d5db;
+    padding: 10px 16px;
+    font-size: 15px;
+    transition: border-color 0.3s ease;
+  }
+
+  .form-control:focus {
+    border-color: #6b00c2;
+    box-shadow: 0 0 0 0.1rem rgba(107, 0, 194, 0.25);
+  }
+
+  .btn-purple {
+    background-color: #6b00c2;
+    color: white;
+    font-weight: 600;
+    transition: background-color 0.3s ease;
+  }
+
+  .btn-purple:hover {
+    background-color: #560099;
+  }
+
+  .alert-danger {
+    background-color: #fee2e2;
+    color: #b91c1c;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+  }
+
+  hr {
+    border-top: 1px solid #e5e7eb;
+    margin: 30px 0;
+  }
+
+  .text-muted {
+    color: #6b7280 !important;
+    font-size: 14px;
+  }
+</style>
 
 <div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card-custom text-center p-4">
-            <h2 class="mb-4">Incident Response Plan</h2>
-            <form method="POST" action="{{ url_for('login') }}">
-                <div class="mb-3">
-                    <label for="username" class="form-label fw-bold w-100">User</label>
-                    <input type="text"
-                           id="username"
-                           class="form-control rounded-pill mx-auto text-center"
-                           name="username"
-                           required
-                           aria-label="Utilizador"
-                           style="max-width: 300px;">
-                </div>
-                <div class="mb-3">
-                    <label for="password" class="form-label fw-bold w-100">Password</label>
-                    <input type="password"
-                           id="password"
-                           class="form-control rounded-pill mx-auto text-center"
-                           name="password"
-                           required
-                           aria-label="Senha"
-                           style="max-width: 300px;">
-                </div>
-
-                {% if message %}
-                    <div class="alert alert-danger mt-3" role="alert">
-                        {{ message }}
-                    </div>
-                {% endif %}
-
-                <div class="d-grid justify-content-center">
-  <button type="submit"
-          class="btn btn-purple"
-          style="width: 180px; height: 50px; font-size: 18px; border-radius: 30px;">
-    Sign In
-  </button>
-</div>
-
-            </form>
-
-            <hr class="my-4">
-
-            <p class="text-center text-muted mb-0">Current Date: {{ current_date }}</p>
-            <p class="text-center text-muted">Application Version: {{ version }}</p>
+  <div class="col-md-6">
+    <div class="card-custom text-center">
+      <h2 class="mb-4">Incident Response Plan</h2>
+      <form method="POST" action="{{ url_for('login') }}">
+        <div class="mb-3">
+          <label for="username" class="form-label w-100">User</label>
+          <input type="text"
+                 id="username"
+                 class="form-control mx-auto text-center"
+                 name="username"
+                 required
+                 aria-label="Utilizador"
+                 style="max-width: 300px;">
         </div>
+        <div class="mb-3">
+          <label for="password" class="form-label w-100">Password</label>
+          <input type="password"
+                 id="password"
+                 class="form-control mx-auto text-center"
+                 name="password"
+                 required
+                 aria-label="Senha"
+                 style="max-width: 300px;">
+        </div>
+
+        {% if message %}
+          <div class="alert alert-danger mt-3" role="alert">
+            {{ message }}
+          </div>
+        {% endif %}
+
+        <div class="d-grid justify-content-center mt-4">
+          <button type="submit"
+                  class="btn btn-purple"
+                  style="width: 180px; height: 48px; font-size: 17px; border-radius: 30px;">
+            Sign In
+          </button>
+        </div>
+      </form>
+
+      <hr class="my-4">
+
+      <p class="text-center text-muted mb-0">Current Date: {{ current_date }}</p>
+      <p class="text-center text-muted">Application Version: {{ version }}</p>
     </div>
+  </div>
 </div>
 {% endblock %}
-
-<script>
-     function toggleDropdown() {
-            document.getElementById("dropdown-content").classList.toggle("show");
-        }
-
-        window.addEventListener('click', function(event) {
-    if (!event.target.matches('.user-button')) {
-        const dropdowns = document.querySelectorAll(".dropdown-content");
-        dropdowns.forEach(d => d.classList.remove("show"));
-    }
-});
-</script>

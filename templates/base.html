@@ -1,121 +1,177 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Incident Response Plan{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            background: linear-gradient(to right, #d1c4e9, #9575cd);
-            font-family: 'Segoe UI', sans-serif;
-            color: #2e2e2e;
-            position: relative;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Incident Response Plan{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
-        .card-custom {
-            background-color: white;
-            border-radius: 15px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            padding: 2rem;
-        }
+  <style>
+    body {
+      background: linear-gradient(to bottom right, #d0c5ec, #e9e0f7);
+      font-family: 'Segoe UI', sans-serif;
+      color: #2e2e2e;
+      padding-top: 70px;
+    }
 
-        .btn-purple {
-            background-color: #7e57c2;
-            color: white;
-            border-radius: 10px;
-        }
+    .card-custom {
+      background-color: white;
+      border-radius: 20px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+      padding: 2rem;
+    }
 
-        .btn-purple:hover {
-            background-color: #673ab7;
-        }
+    .btn-purple {
+      background-color: #7e57c2;
+      color: white;
+      border-radius: 15px;
+    }
 
-        .user-dropdown {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-        }
+    .btn-purple:hover {
+      background-color: #673ab7;
+    }
 
-        .user-button {
-            background-color: #3498db;
-            color: white;
-            padding: 10px 16px;
-            font-size: 14px;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-        }
+    .btn-success, .btn-secondary {
+      border-radius: 15px;
+      font-weight: 500;
+    }
 
-        .user-button:hover {
-            background-color: #2980b9;
-        }
+    .user-menu {
+      position: relative;
+      top: 20px;
+      right: 30px;
+      z-index: 1000;
+      font-family: 'Inter', sans-serif;
+    }
 
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            right: 0;
-            background-color: white;
-            min-width: 120px;
-            box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
-            border-radius: 6px;
-            overflow: hidden;
-        }
+    .user-toggle {
+      background: linear-gradient(135deg, #8a00c2, #6b00a8);
+      color: white;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 35px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
 
-        .dropdown-content a {
-            color: black;
-            padding: 10px 12px;
-            text-decoration: none;
-            display: block;
-        }
+    .user-toggle:hover {
+      background: linear-gradient(135deg, #6b00a8, #4c0073);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+    }
 
-        .dropdown-content a:hover {
-            background-color: #f1f1f1;
-        }
+    .user-dropdown-content {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      background-color: white;
+      min-width: 130px;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+      border-radius: 8px;
+      overflow: hidden;
+      z-index: 1060;
+      display: none;
+    }
 
-        .show {
-            display: block;
-        }
-    </style>
+    .user-dropdown-content a {
+      color: black;
+      padding: 12px 16px;
+      text-decoration: none;
+      display: block;
+      font-size: 14px;
+    }
+
+    .user-dropdown-content a:hover {
+      background-color: #f5f5f5;
+    }
+
+    .show {
+      display: block;
+    }
+
+    .page-header {
+      position: fixed;
+      top: 0;
+      right: 0;
+      left: 0;
+      height: 60px;
+      background-color: white;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      padding: 0 30px;
+      z-index: 1050;
+    }
+
+    /* Tabs / Steps Style */
+    .nav-tabs .nav-link {
+      color: #6b00a8;
+      font-weight: 500;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 16px;
+    }
+
+    .nav-tabs .nav-link.active {
+      background-color: #198754;
+      color: white !important;
+    }
+
+    .nav-tabs .nav-link:hover {
+      color: #198754;
+    }
+
+    /* File input cleaner look */
+    input[type="file"] {
+      border-radius: 10px;
+      padding: 8px;
+    }
+
+  </style>
 </head>
 <body>
-
-{% if show_user_dropdown %}
-    <div class="user-dropdown">
-        <button class="user-button" onclick="toggleDropdown()" aria-haspopup="true" aria-expanded="false">
-    {{ session['username'] }} ⌄
-</button>
-<div id="dropdown-content" class="dropdown-content" role="menu" aria-label="User menu">
-    <a href="{{ url_for('logout') }}" role="menuitem">Logout</a>
-</div>
-
+  <header class="page-header">
+    {% if show_user_dropdown %}
+    <div class="user-menu">
+      <button class="user-toggle" onclick="toggleDropdown()" aria-haspopup="true" aria-expanded="false">
+        <span class="user-name">{{ session['username'] }}</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div id="dropdown-content" class="user-dropdown-content" role="menu" aria-label="User menu">
+        <a href="{{ url_for('logout') }}" role="menuitem">🚪 Logout</a>
+      </div>
     </div>
-{% endif %}
+    {% endif %}
+  </header>
 
-    <div class="container mt-5">
-        {% block content %}{% endblock %}
-    </div>
+  <div class="container mt-4 mb-5">
+    {% block content %}{% endblock %}
+  </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    function toggleDropdown() {
+      const dropdown = document.getElementById("dropdown-content");
+      const isShown = dropdown.classList.toggle("show");
+      const btn = document.querySelector('.user-toggle');
+      btn.setAttribute('aria-expanded', isShown);
+    }
 
-    <script>
-        function toggleDropdown() {
-    const dropdown = document.getElementById("dropdown-content");
-    const isShown = dropdown.classList.toggle("show");
-    const btn = document.querySelector('.user-button');
-    btn.setAttribute('aria-expanded', isShown);
-}
+    window.addEventListener('click', function(event) {
+      if (!event.target.closest('.user-menu')) {
+        const dropdowns = document.querySelectorAll(".user-dropdown-content");
+        dropdowns.forEach(d => d.classList.remove("show"));
+      }
+    });
+  </script>
 
-
-        window.addEventListener('click', function(event) {
-            if (!event.target.matches('.user-button')) {
-                const dropdowns = document.querySelectorAll(".dropdown-content");
-                dropdowns.forEach(d => d.classList.remove("show"));
-            }
-        });
-    </script>
-
-    {% block scripts %}{% endblock %}
+  {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -60,48 +60,55 @@
     margin-top: 4px;
   }
 
-  .user-dropdown {
+  .user-menu {
     position: absolute;
     top: 20px;
-    right: 20px;
+    right: 30px;
     z-index: 1000;
+    font-family: 'Inter', sans-serif;
   }
 
-  .user-button {
-    background-color: #3498db;
+  .user-toggle {
+    background-color: #6b00c2;
     color: white;
     padding: 10px 16px;
-    font-size: 14px;
     border: none;
-    border-radius: 25px;
+    border-radius: 30px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     cursor: pointer;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    transition: background-color 0.3s ease;
   }
 
-  .user-button:hover {
-    background-color: #2980b9;
+  .user-toggle:hover {
+    background-color: #58009f;
   }
 
-  .dropdown-content {
+  .user-dropdown-content {
     display: none;
     position: absolute;
     right: 0;
     background-color: white;
-    min-width: 120px;
+    min-width: 140px;
     box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
-    border-radius: 6px;
+    border-radius: 8px;
     overflow: hidden;
-    z-index: 1000;
+    z-index: 1001;
+    margin-top: 5px;
   }
 
-  .dropdown-content a {
+  .user-dropdown-content a {
     color: black;
-    padding: 10px 12px;
+    padding: 10px 14px;
     text-decoration: none;
     display: block;
+    font-size: 14px;
   }
 
-  .dropdown-content a:hover {
+  .user-dropdown-content a:hover {
     background-color: #f1f1f1;
   }
 
@@ -111,12 +118,13 @@
 </style>
 
 {% if show_user_dropdown %}
-<div class="user-dropdown">
-  <button class="user-button" onclick="toggleDropdown()">
-    {{ session['username'] }} ⌄
+<div class="user-menu">
+  <button class="user-toggle" onclick="toggleDropdown()">
+    <span class="user-name">{{ session['username'] }}</span>
+    <span class="chevron">▾</span>
   </button>
-  <div id="dropdown-content" class="dropdown-content">
-    <a href="{{ url_for('logout') }}">Logout</a>
+  <div id="dropdown-content" class="user-dropdown-content">
+    <a href="{{ url_for('logout') }}">🚪 Logout</a>
   </div>
 </div>
 {% endif %}
@@ -234,13 +242,10 @@
   }
 
   window.addEventListener('click', function(event) {
-    if (!event.target.matches('.user-button')) {
-      const dropdowns = document.querySelectorAll(".dropdown-content");
-      dropdowns.forEach(d => d.classList.remove("show"));
+    if (!event.target.closest('.user-toggle')) {
+      document.getElementById("dropdown-content").classList.remove("show");
     }
   });
 </script>
 {% endblock %}
-
-
 

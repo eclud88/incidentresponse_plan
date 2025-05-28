@@ -7,7 +7,7 @@
   <style>
     body {
       font-family: 'Inter', sans-serif;
-      background-color: #f3f4f6;
+      background: linear-gradient(to right, #f3f4f6, #f9fafb);
       margin: 0;
       padding: 30px;
       color: #1f2937;
@@ -19,8 +19,9 @@
     }
 
     h1 {
-      font-size: 2.2rem;
+      font-size: 2.4rem;
       color: #6b00c2;
+      font-weight: 700;
     }
 
     h2 {
@@ -30,47 +31,55 @@
       color: #4b5563;
     }
 
-    .user-dropdown {
+    .user-menu {
       position: absolute;
       top: 20px;
       right: 30px;
       z-index: 1000;
     }
 
-    .user-button {
+    .user-toggle {
       background-color: #6b00c2;
       color: white;
-      padding: 10px 20px;
-      font-size: 14px;
+      padding: 10px 18px;
       border: none;
-      border-radius: 25px;
+      border-radius: 30px;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
       cursor: pointer;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      transition: background-color 0.3s ease;
     }
 
-    .user-button:hover {
+    .user-toggle:hover {
       background-color: #560099;
     }
 
-    .dropdown-content {
+    .user-dropdown-content {
       display: none;
       position: absolute;
+      top: 46px;
       right: 0;
       background-color: white;
-      min-width: 120px;
-      box-shadow: 0 8px 16px rgba(0,0,0,0.15);
-      border-radius: 6px;
+      border-radius: 10px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      min-width: 140px;
       overflow: hidden;
     }
 
-    .dropdown-content a {
-      color: #111827;
-      padding: 10px 14px;
+    .user-dropdown-content a {
+      color: #1f2937;
+      padding: 10px 16px;
       text-decoration: none;
       display: block;
+      font-size: 14px;
+      transition: background-color 0.2s;
     }
 
-    .dropdown-content a:hover {
+    .user-dropdown-content a:hover {
       background-color: #f3f4f6;
     }
 
@@ -80,14 +89,14 @@
 
     .top-bar {
       display: flex;
-      justify-content: flex-end;
+      justify-content: center;
       margin-bottom: 25px;
     }
 
     .btn-new {
       background-color: #10b981;
       color: white;
-      padding: 12px 22px;
+      padding: 12px 26px;
       border: none;
       border-radius: 8px;
       font-size: 15px;
@@ -105,10 +114,10 @@
       width: 100%;
       border-collapse: separate;
       border-spacing: 0;
-      border-radius: 12px;
+      border-radius: 14px;
       overflow: hidden;
       background: white;
-      box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+      box-shadow: 0 3px 20px rgba(0, 0, 0, 0.06);
     }
 
     thead tr {
@@ -139,7 +148,6 @@
       padding: 14px 18px;
       text-align: center;
       font-size: 14px;
-      vertical-align: middle;
     }
 
     .btn-delete {
@@ -158,8 +166,10 @@
     #confirmModal {
       display: none;
       position: fixed;
-      top: 0; left: 0;
-      width: 100vw; height: 100vh;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
       background-color: rgba(0, 0, 0, 0.4);
       justify-content: center;
       align-items: center;
@@ -169,10 +179,10 @@
     #confirmModal .modal-content {
       background: white;
       padding: 30px;
-      border-radius: 12px;
-      max-width: 360px;
+      border-radius: 14px;
+      max-width: 400px;
       text-align: center;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
     }
 
     #confirmModal p {
@@ -182,7 +192,7 @@
     }
 
     #confirmModal button {
-      padding: 10px 20px;
+      padding: 10px 22px;
       border: none;
       border-radius: 8px;
       font-weight: 600;
@@ -213,12 +223,13 @@
 <body>
 
 {% if show_user_dropdown %}
-<div class="user-dropdown">
-  <button class="user-button" onclick="toggleDropdown()">
-    {{ session['username'] }} ⌄
+<div class="user-menu">
+  <button class="user-toggle" onclick="toggleDropdown()">
+    <span class="user-name">{{ session['username'] }}</span>
+    <span class="chevron">▾</span>
   </button>
-  <div id="dropdown-content" class="dropdown-content">
-    <a href="{{ url_for('logout') }}">Logout</a>
+  <div id="dropdown-content" class="user-dropdown-content">
+    <a href="{{ url_for('logout') }}">🚪 Logout</a>
   </div>
 </div>
 {% endif %}
@@ -227,7 +238,7 @@
 <h2>Your active incident records</h2>
 
 <div class="top-bar">
-  <a href="/incident" class="btn-new">+ New Record</a>
+  <a href="/incident" class="btn-new">➕ New Record</a>
 </div>
 
 <table>
@@ -270,9 +281,8 @@
   }
 
   window.addEventListener('click', function(event) {
-    if (!event.target.matches('.user-button')) {
-      const dropdowns = document.querySelectorAll(".dropdown-content");
-      dropdowns.forEach(d => d.classList.remove("show"));
+    if (!event.target.closest('.user-menu')) {
+      document.getElementById("dropdown-content")?.classList.remove("show");
     }
   });
 
@@ -299,10 +309,10 @@
       if (response.ok) {
         location.reload();
       } else {
-        alert('Error deleting the record.');
+        alert('❌ Error deleting the record.');
       }
     }).catch(() => {
-      alert('Communication error with the server.');
+      alert('❌ Communication error with the server.');
     });
 
     document.getElementById('confirmModal').style.display = 'none';
@@ -332,5 +342,7 @@
 
 </body>
 </html>
+
+
 
 

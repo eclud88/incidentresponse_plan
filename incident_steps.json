@@ -376,7 +376,7 @@
       ]
     },
     {
-      "type": "Potentially Undesired Accessible Services",
+      "type": "Potentially Unwanted Accessible Services",
       "steps": [
         "Inventory exposed non-essential services.",
         "Assess risks of undue exposure.",
