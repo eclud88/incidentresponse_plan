@@ -4,19 +4,19 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-lg-10">
-    <div class="card-custom">
-      <h3 class="mb-4 text-center fw-bold">Incident Response Plan</h3>
+    <div class="card-custom p-4">
+      <h2 class="mb-2 text-center fw-bold">I n c i d e n t  R e s p o n s e  P l a n</h2>
 
-      {% if class and type %}
+      {% if class_ and type_ %}
       <div class="mb-4 text-center">
-        <h5 class="fw-semibold">
-          Incident Class: <span class="text-primary">{{ class }}</span><br>
-          Incident Type: <span class="text-primary">{{ type }}</span>
+        <h5 class="fw-semibold text-muted">
+          Class: <span class="text-primary">{{ class_ }}</span> &nbsp;|&nbsp;
+          Type: <span class="text-primary">{{ type_ }}</span>
         </h5>
       </div>
       {% endif %}
 
-      <!-- Tabs -->
+      <!-- Navigation Tabs -->
       <ul class="nav nav-tabs justify-content-center" id="stepsTab" role="tablist">
         {% for step in steps %}
         <li class="nav-item" role="presentation">
@@ -34,38 +34,56 @@
         {% endfor %}
       </ul>
 
-      <!-- Step Content -->
+      <!-- Tab Content -->
       <div class="tab-content mt-4" id="stepsTabContent">
         {% for step in steps %}
+        {% set step_index = loop.index0 %}
         <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
-             id="step-{{ loop.index0 }}"
+             id="step-{{ step_index }}"
              role="tabpanel"
-             aria-labelledby="tab-{{ loop.index0 }}">
+             aria-labelledby="tab-{{ step_index }}">
 
-          <p class="fw-semibold fs-5">{{ step }}</p>
+          <p class="fw-bold fs-5 border-start border-4 border-primary ps-3 mb-3">
+            {{ step.step }}
+          </p>
+
+          {% if step.sub_steps %}
+          <div class="mb-4 ms-3">
+            <p class="fw-semibold text-muted">Sub-Steps Checklist:</p>
+            {% for sub in step.sub_steps %}
+            <div class="form-check mb-2">
+              <input class="form-check-input substep-checkbox" type="checkbox" id="substep-{{ step_index }}-{{ loop.index0 }}" value="{{ sub }}">
+              <label class="form-check-label" for="substep-{{ step_index }}-{{ loop.index0 }}">
+                {{ sub }}
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
 
           <div class="mb-3">
-            <label for="evidence-{{ loop.index0 }}" class="form-label">Evidence(s):</label>
-            <textarea id="evidence-{{ loop.index0 }}" class="form-control" rows="4"
-                      placeholder="Describe the evidence(s)..." required></textarea>
+            <label for="evidence-{{ step_index }}" class="form-label fw-semibold">Evidence(s):</label>
+            <textarea id="evidence-{{ step_index }}" class="form-control" rows="4"
+                      placeholder="Describe logs, actions taken, screenshots, tools used, findings, or communications. This information will be included in the incident report."
+                      required></textarea>
           </div>
 
           <div class="mb-4">
-            <label for="file-{{ loop.index0 }}" class="form-label">Attach File:</label>
-            <input type="file" class="form-control" id="file-{{ loop.index0 }}"
-                   onchange="updateIncident({{ loop.index0 }})">
+            <label for="file-{{ step_index }}" class="form-label fw-semibold">Attach File:</label>
+            <input type="file" class="form-control" id="file-{{ step_index }}"
+                   onchange="updateIncident({{ step_index }})">
           </div>
 
           <div class="d-flex justify-content-between mt-4">
             {% if not loop.first %}
-            <button class="btn btn-secondary" onclick="goBackStep({{ loop.index0 }})">← Previous</button>
+            <button class="btn btn-secondary" onclick="goBackStep({{ step_index }})">← Previous</button>
             {% else %}
             <span></span>
             {% endif %}
 
             {% if not loop.last %}
-            <button class="btn btn-secondary" id="btn-next-{{ loop.index0 }}"
-                    onclick="nextStep({{ loop.index0 }})" disabled>Next →</button>
+            <button class="btn btn-secondary" id="btn-next-{{ step_index }}"
+                    onclick="nextStep({{ step_index }})" disabled>Next →</button>
             {% else %}
             <button class="btn btn-purple" id="btn-finish" onclick="finishPlan()" disabled>✅ Finish Plan</button>
             {% endif %}
@@ -85,35 +103,40 @@
     console.log(`File updated in step ${index}`);
   }
 
-  async function nextStep(currentIndex) {
-    const textarea = document.getElementById(`evidence-${currentIndex}`);
-    if (!textarea.value.trim()) {
-      alert('Please fill in the evidence before continuing.');
-      textarea.focus();
-      return;
-    }
-
-    try {
-      await fetch("/incident/save_step", {
-        method: "POST",
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          step: currentIndex,
-          evidence: textarea.value.trim()
-        })
-      });
-
-      const currentTab = document.getElementById(`tab-${currentIndex}`);
-      currentTab.classList.add('bg-success', 'text-white');
-
-      const nextTab = document.getElementById(`tab-${currentIndex + 1}`);
-      if (nextTab) {
-        new bootstrap.Tab(nextTab).show();
-      }
-    } catch (err) {
-      alert('Error saving the step. Please try again.');
-    }
+ async function nextStep(currentIndex) {
+  const textarea = document.getElementById(`evidence-${currentIndex}`);
+  if (!textarea.value.trim()) {
+    alert('Please fill in the evidence before continuing.');
+    textarea.focus();
+    return;
   }
+
+  const checkedSubsteps = Array.from(document.querySelectorAll(`#step-${currentIndex} .substep-checkbox:checked`))
+    .map(cb => cb.value);
+
+  try {
+    await fetch("/incident/save_step", {
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        step: currentIndex,
+        evidence: textarea.value.trim(),
+        checked_substeps: checkedSubsteps
+      })
+    });
+
+    const currentTab = document.getElementById(`tab-${currentIndex}`);
+    currentTab.classList.add('bg-success', 'text-white');
+
+    const nextTab = document.getElementById(`tab-${currentIndex + 1}`);
+    if (nextTab) {
+      new bootstrap.Tab(nextTab).show();
+    }
+  } catch (err) {
+    alert('Error saving the step. Please try again.');
+  }
+}
+
 
   function goBackStep(currentIndex) {
     const prevTab = document.getElementById(`tab-${currentIndex - 1}`);
@@ -122,29 +145,36 @@
     }
   }
 
-  function finishPlan() {
-    const lastIndex = {{ steps|length - 1 }};
-    const textarea = document.getElementById(`evidence-${lastIndex}`);
+function finishPlan() {
+  const lastIndex = {{ steps|length - 1 }};
+  const textarea = document.getElementById(`evidence-${lastIndex}`);
 
-    if (!textarea.value.trim()) {
-      alert('Please fill in the evidence for the last step before finishing.');
-      textarea.focus();
-      return;
-    }
-
-    fetch('/incident/save_step', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        step: lastIndex,
-        evidence: textarea.value.trim()
-      })
-    }).then(() => {
-      window.location.href = "/incident/complete";
-    }).catch(() => {
-      alert("Error finishing the plan.");
-    });
+  if (!textarea.value.trim()) {
+    alert('Please fill in the evidence for the last step before finishing.');
+    textarea.focus();
+    return;
   }
+
+  const checkedSubsteps = Array.from(document.querySelectorAll(`#step-${lastIndex} .substep-checkbox:checked`))
+    .map(cb => cb.value);
+
+  fetch('/incident/save_step', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      step: lastIndex,
+      evidence: textarea.value.trim(),
+      checked_substeps: checkedSubsteps
+    }),
+    credentials: 'include'
+    });
+  }).then(() => {
+    window.location.href = "/incident/complete";
+  }).catch(() => {
+    alert("Error finishing the plan.");
+  });
+}
+
 
   document.addEventListener('DOMContentLoaded', function () {
     const totalSteps = {{ steps|length }};
@@ -153,7 +183,6 @@
 
       if (i < totalSteps - 1) {
         const nextButton = document.getElementById(`btn-next-${i}`);
-
         function checkField() {
           if (textarea.value.trim()) {
             nextButton.disabled = false;
@@ -165,18 +194,15 @@
             nextButton.classList.add('btn-secondary');
           }
         }
-
         textarea.addEventListener('input', checkField);
         checkField();
       }
 
       if (i === totalSteps - 1) {
         const finishButton = document.getElementById("btn-finish");
-
         function checkLastField() {
           finishButton.disabled = !textarea.value.trim();
         }
-
         textarea.addEventListener('input', checkLastField);
         checkLastField();
       }
