@@ -5,7 +5,7 @@
 <div class="row justify-content-center">
   <div class="col-lg-10">
     <div class="card-custom p-4">
-      <h2 class="mb-2 text-center fw-bold">I n c i d e n t  R e s p o n s e  P l a n</h2>
+      <h2 class="mb-2 text-center fw-bold" style="letter-spacing: 0.15em;">Incident Response Plan</h2>
 
       {% if class_ and type_ %}
       <div class="mb-4 text-center">
@@ -16,7 +16,6 @@
       </div>
       {% endif %}
 
-      <!-- Navigation Tabs -->
       <ul class="nav nav-tabs justify-content-center" id="stepsTab" role="tablist">
         {% for step in steps %}
         <li class="nav-item" role="presentation">
@@ -27,14 +26,14 @@
                   type="button"
                   role="tab"
                   aria-controls="step-{{ loop.index0 }}"
-                  aria-selected="{{ 'true' if loop.first else 'false' }}">
+                  aria-selected="{{ 'true' if loop.first else 'false' }}"
+                  {% if not loop.first %}disabled{% endif %}>
             Step {{ loop.index }}
           </button>
         </li>
         {% endfor %}
       </ul>
 
-      <!-- Tab Content -->
       <div class="tab-content mt-4" id="stepsTabContent">
         {% for step in steps %}
         {% set step_index = loop.index0 %}
@@ -52,7 +51,11 @@
             <p class="fw-semibold text-muted">Sub-Steps Checklist:</p>
             {% for sub in step.sub_steps %}
             <div class="form-check mb-2">
-              <input class="form-check-input substep-checkbox" type="checkbox" id="substep-{{ step_index }}-{{ loop.index0 }}" value="{{ sub }}">
+              <input class="form-check-input substep-checkbox"
+                type="checkbox"
+                id="substep-{{ step_index }}-{{ loop.index0 }}"
+                value="{{ sub }}"
+                data-step-index="{{ step_index }}">
               <label class="form-check-label" for="substep-{{ step_index }}-{{ loop.index0 }}">
                 {{ sub }}
               </label>
@@ -64,14 +67,13 @@
           <div class="mb-3">
             <label for="evidence-{{ step_index }}" class="form-label fw-semibold">Evidence(s):</label>
             <textarea id="evidence-{{ step_index }}" class="form-control" rows="4"
-                      placeholder="Describe logs, actions taken, screenshots, tools used, findings, or communications. This information will be included in the incident report."
-                      required></textarea>
+              placeholder="Describe logs, actions taken, screenshots, tools used, findings, or communications. This information will be included in the incident report."
+              required></textarea>
           </div>
 
           <div class="mb-4">
             <label for="file-{{ step_index }}" class="form-label fw-semibold">Attach File:</label>
-            <input type="file" class="form-control" id="file-{{ step_index }}"
-                   onchange="updateIncident({{ step_index }})">
+            <input type="file" class="form-control" id="file-{{ step_index }}" onchange="updateIncident({{ step_index }}), nextStep({{ step_index }})">
           </div>
 
           <div class="d-flex justify-content-between mt-4">
@@ -82,8 +84,8 @@
             {% endif %}
 
             {% if not loop.last %}
-            <button class="btn btn-secondary" id="btn-next-{{ step_index }}"
-                    onclick="nextStep({{ step_index }})" disabled>Next →</button>
+            <button class="btn btn-secondary" id="btn-next-{{ step_index }}" onclick="teste()" >Next →</button>
+
             {% else %}
             <button class="btn btn-purple" id="btn-finish" onclick="finishPlan()" disabled>✅ Finish Plan</button>
             {% endif %}
@@ -95,47 +97,108 @@
     </div>
   </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
+
 <script>
-  function updateIncident(index) {
-    console.log(`File updated in step ${index}`);
+  function teste() {
+    console.log("teste");
   }
+  const nextBtn = document.getElementById('btn-next-{{ step_index }}');
 
- async function nextStep(currentIndex) {
-  const textarea = document.getElementById(`evidence-${currentIndex}`);
-  if (!textarea.value.trim()) {
-    alert('Please fill in the evidence before continuing.');
-    textarea.focus();
-    return;
+  function toggleDropdown() {
+    document.getElementById("dropdown-content").classList.toggle("show");
   }
+  async function nextStep(currentIndex) {
+    console.log(nextStep called for step ${currentIndex});
 
-  const checkedSubsteps = Array.from(document.querySelectorAll(`#step-${currentIndex} .substep-checkbox:checked`))
-    .map(cb => cb.value);
+    const textarea = document.getElementById(evidence-${currentIndex});
+    const evidence = textarea?.value.trim() || '';
 
-  try {
-    await fetch("/incident/save_step", {
-      method: "POST",
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        step: currentIndex,
-        evidence: textarea.value.trim(),
-        checked_substeps: checkedSubsteps
-      })
-    });
+    const checkedSubsteps = Array.from(
+      document.querySelectorAll(#step-${currentIndex} .substep-checkbox:checked)
+    ).map(cb => cb.value);
 
-    const currentTab = document.getElementById(`tab-${currentIndex}`);
-    currentTab.classList.add('bg-success', 'text-white');
-
-    const nextTab = document.getElementById(`tab-${currentIndex + 1}`);
-    if (nextTab) {
-      new bootstrap.Tab(nextTab).show();
+    if (evidence.length === 0 && checkedSubsteps.length === 0) {
+      alert('Please provide evidence or check at least one substep before continuing.');
+      if (textarea) textarea.focus();
+      return;
     }
-  } catch (err) {
-    alert('Error saving the step. Please try again.');
+    try {
+      await updatenextButton(currentIndex);
+    } catch (err) {
+      console.error(Erro ao avançar para o passo seguinte (${currentIndex}):, err);
+      alert('Erro ao guardar o passo. Tenta novamente.');
+    }
   }
-}
+  async function updatenextButton(currentIndex) {
+    console.log("estou aqui");
+    const textarea = document.getElementById(`evidence-${currentIndex}`);
+    const evidence = textarea.value.trim();
+    console.log('textarea', textarea, 'evidence', evidence);
+
+    if (evidence.length > 2000) {
+      alert("Evidence is too long. Please shorten it.");
+      return;
+    }
+
+    const checkedSubsteps = Array.from(
+      document.querySelectorAll(`#step-${currentIndex} .substep-checkbox:checked`)
+    ).map(cb => cb.value);
+
+    try {
+      await fetch("/incident/save_step", {
+        method: "POST",
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step: currentIndex,
+          evidence: evidence,
+          checked_substeps: checkedSubsteps
+        })
+       });
+
+      const currentTab = document.getElementById(`tab-${currentIndex}`);
+      if (currentTab) {
+        currentTab.classList.add('bg-success', 'text-white');
+      }
+
+      const nextIndex = currentIndex + 1;
+      const nextTab = document.getElementById(`tab-${nextIndex}`);
+      if (nextTab) {
+        nextTab.removeAttribute('disabled');
+        new bootstrap.Tab(nextTab).show();
+      }
+
+    } catch (err) {
+      alert('Error saving the step. Please try again.');
+      console.error(err);
+    }
+  }
+
+  function updateIncident(index) {
+    const fileInput = document.getElementById(`file-${index}`);
+    const file = fileInput?.files[0];
+    if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('step', index);
+
+      fetch('/incident/upload_file', {
+        method: 'POST',
+        body: formData
+      })
+        .then(response => response.json())
+        .then(data => {
+        if (data.status === 'success') {
+          console.log(`File uploaded for step ${index}`);
+        } else {
+          console.error('File upload failed');
+        }
+      })
+      .catch(error => {
+        console.error('Error uploading file:', error);
+      });
+  }
 
 
   function goBackStep(currentIndex) {
@@ -145,68 +208,116 @@
     }
   }
 
-function finishPlan() {
-  const lastIndex = {{ steps|length - 1 }};
-  const textarea = document.getElementById(`evidence-${lastIndex}`);
+  function finishPlan() {
+    const lastIndex = {{ steps|length - 1 }};
+    const textarea = document.getElementById(`evidence-${lastIndex}`);
+    if (!textarea) return;
+      const evidence = textarea.value.trim();
+      const checkedSubsteps = Array.from(
+        document.querySelectorAll(`#step-${lastIndex} .substep-checkbox:checked`)
+       ).map(cb => cb.value);
 
-  if (!textarea.value.trim()) {
-    alert('Please fill in the evidence for the last step before finishing.');
-    textarea.focus();
-    return;
+    if (evidence.length === 0 && checkedSubsteps.length === 0) {
+      alert('Please provide evidence or check at least one substep before finishing.');
+      textarea.focus();
+      return;
+    }
+
+    const finishButton = document.getElementById('btn-finish');
+    if (finishButton) finishButton.disabled = true;
+
+    fetch('/incident/save_step', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        step: lastIndex,
+        evidence: evidence,
+        checked_substeps: checkedSubsteps
+      })
+    })
+    .then(() => {
+      window.location.href = "/incident/complete";
+    })
+    .catch(() => {
+      alert("Error finishing the plan.");
+    });
   }
 
-  const checkedSubsteps = Array.from(document.querySelectorAll(`#step-${lastIndex} .substep-checkbox:checked`))
-    .map(cb => cb.value);
-
-  fetch('/incident/save_step', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      step: lastIndex,
-      evidence: textarea.value.trim(),
-      checked_substeps: checkedSubsteps
-    }),
-    credentials: 'include'
-    });
-  }).then(() => {
-    window.location.href = "/incident/complete";
-  }).catch(() => {
-    alert("Error finishing the plan.");
-  });
-}
-
-
   document.addEventListener('DOMContentLoaded', function () {
+    console.log("estou");
+
+    document.querySelectorAll('.substep-checkbox').forEach(cb => {
+      cb.addEventListener('change', function (event) {
+        const stepIndex = parseInt(event.target.dataset.stepIndex, 10);
+        if (!isNaN(stepIndex)) {
+          nextStep(stepIndex);
+        }
+      });
+    });
+
+    document.querySelectorAll('textarea[id^="evidence-"]').forEach(textarea => {
+      textarea.addEventListener('input', event => {
+        const stepIndex = parseInt(event.target.dataset.stepIndex, 10);
+        if (!isNaN(stepIndex)) {
+           console.log('Evidence input changed for step ${stepIndex}');
+           nextStep(stepIndex);
+        }
+      });
+    });
+
     const totalSteps = {{ steps|length }};
     for (let i = 0; i < totalSteps; i++) {
       const textarea = document.getElementById(`evidence-${i}`);
+      const nextButton = document.getElementById(`btn-next-${i}`);
+      const finishButton = document.getElementById('btn-finish');
+      const isLast = i === totalSteps - 1;
 
-      if (i < totalSteps - 1) {
-        const nextButton = document.getElementById(`btn-next-${i}`);
-        function checkField() {
-          if (textarea.value.trim()) {
-            nextButton.disabled = false;
-            nextButton.classList.remove('btn-secondary');
-            nextButton.classList.add('btn-success');
-          } else {
-            nextButton.disabled = true;
-            nextButton.classList.remove('btn-success');
-            nextButton.classList.add('btn-secondary');
+      const checkboxes = document.querySelectorAll(`#step-${i} .substep-checkbox`);
+
+      function checkInput() {
+      console.log("estou aqui 2");
+        const filled = textarea.value.trim().length > 0;
+        const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+        const shouldEnable = filled || anyChecked;
+
+        if (!isLast && nextButton) {
+          nextButton.disabled = !shouldEnable;
+          nextButton.classList.toggle('btn-success', shouldEnable);
+          nextButton.classList.toggle('btn-secondary', !shouldEnable);
+
+          const nextTab = document.getElementById(`tab-${i + 1}`);
+          if (nextTab && shouldEnable) {
+            nextTab.removeAttribute('disabled');
           }
         }
-        textarea.addEventListener('input', checkField);
-        checkField();
+
+        if (isLast && finishButton) {
+          finishButton.disabled = !shouldEnable;
+          finishButton.classList.toggle('btn-success', shouldEnable);
+          finishButton.classList.toggle('btn-secondary', !shouldEnable);
+        }
       }
 
-      if (i === totalSteps - 1) {
-        const finishButton = document.getElementById("btn-finish");
-        function checkLastField() {
-          finishButton.disabled = !textarea.value.trim();
-        }
-        textarea.addEventListener('input', checkLastField);
-        checkLastField();
+      if (textarea) {
+        textarea.addEventListener('input', checkInput);
       }
+      checkboxes.forEach(cb => cb.addEventListener('change', checkInput));
+
+      checkInput(); // Initial check
     }
+
+    const tabButtons = document.querySelectorAll('button[data-bs-toggle="tab"]');
+    tabButtons.forEach(button => {
+      button.addEventListener('shown.bs.tab', function (e) {
+        const targetId = e.target.getAttribute('data-bs-target');
+        const index = parseInt(targetId.split('-')[1]);
+        const textarea = document.getElementById(`evidence-${index}`);
+        if (textarea) {
+          textarea.dispatchEvent(new Event('input'));
+        }
+      });
+    });
   });
+
 </script>
 {% endblock %}

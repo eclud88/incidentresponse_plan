@@ -1,11 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, abort, send_file, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
+from werkzeug.utils import secure_filename
 from fpdf import FPDF
+from PIL import Image
 import os
 import io
 import json
-
 
 
 app = Flask(__name__)
@@ -15,6 +16,7 @@ app.secret_key = 'secret_key_1234'
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SESSION_TYPE'] = 'filesystem'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
 
 
@@ -39,6 +41,7 @@ class Incident(db.Model):
     improvements = db.Column(db.Text)
     observations = db.Column(db.Text)
     start_datetime = db.Column(db.DateTime, nullable=True)
+    end_datetime = db.Column(db.DateTime, nullable=True)
 
 
 def load_incidents():
@@ -120,15 +123,21 @@ def incident():
 
     if request.method == 'POST':
         selected_class = request.form.get('class')
+        print('SELECTED CLASS: ', selected_class)
         selected_type = request.form.get('type')
 
         if selected_class and selected_type:
-            session['class'] = selected_class
-            session['type'] = selected_type
+            session['class_'] = selected_class
+            session['type_'] = selected_type
             session['start'] = datetime.now()
+
             return redirect(url_for('steps', class_=selected_class, type_=selected_type))
 
-    return render_template('incident.html', incidents=incidents, class_=selected_class, type=selected_type, show_user_dropdown=True)
+    return render_template(
+        'incident.html',
+        incidents=incidents,
+        show_user_dropdown=True
+    )
 
 
 @app.route('/incident/steps', methods=['GET', 'POST'])
@@ -138,46 +147,54 @@ def steps():
         return redirect(url_for('index'))
 
     incident_steps = load_incident_steps()
-
-    if isinstance(incident_steps, list) and len(incident_steps) == 1 and isinstance(incident_steps[0], list):
+    if len(incident_steps) == 1 and isinstance(incident_steps[0], list):
         incident_steps = incident_steps[0]
 
     if request.method == 'GET':
-        class_req = request.args.get('class_')
-        type_req = request.args.get('type_')
+        class_param = request.args.get('class_')
+        type_param = request.args.get('type_')
+
+        checked_substeps = request.args.get('checked_substeps')
     else:
         json_data = request.get_json(silent=True) or {}
-        class_req = request.form.get('class') or json_data.get('class')
-        type_req = request.form.get('type') or json_data.get('type')
+        class_param = (
+            request.form.get('class') or request.form.get('class_') or
+            json_data.get('class') or json_data.get('class_') or
+            request.args.get('class') or request.args.get('class_')
+        )
+        type_param = (
+            request.form.get('type') or request.form.get('type_') or
+            json_data.get('type') or json_data.get('type_') or
+            request.args.get('type') or request.args.get('type_')
+        )
 
-    if not class_req or not type_req:
+        checked_substeps = (
+            request.form.get('checked_substeps') or
+            request.args.get('checked_substeps') or
+            json_data.get('checked_substeps')
+        )
+
+    if not class_param or not type_param:
         return abort(400, description="Parameters 'class' and 'type' are required.")
 
-    found_steps = None
+    # Match steps
+    found_steps = []
     for item in incident_steps:
-        if item.get('class', '').lower() == class_req.lower():
+        if item.get('class', '').lower() == class_param.lower():
             for type_item in item.get('types', []):
-                if type_item.get('type', '').lower() == type_req.lower():
+                if type_item.get('type', '').lower() == type_param.lower():
                     found_steps = type_item.get('steps', [])
                     break
-            if found_steps:
-                break
 
-    session['class'] = class_req
-    session['type'] = type_req
+    # Store in session
+    session['class'] = class_param
+    session['type'] = type_param
     session['steps'] = found_steps
-    session['start'] = session.get('start') or datetime.now()
+    session['checked_substeps'] = checked_substeps
+    session['start'] = session.get('start') or datetime.now().isoformat()
     session.modified = True
 
-    return render_template('steps.html', steps=found_steps, class_=class_req, type_=type_req, show_user_dropdown=True)
-
-    session['incident_class'] = class_req
-    session['incident_type'] = type_req
-    session['steps'] = found_steps
-    session['start'] = session.get('start') or datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    session.modified = True
-
-    return render_template('steps.html', steps=found_steps, class_=class_req, type_=type_req, show_user_dropdown=True)
+    return render_template('steps.html', checked_substeps=checked_substeps, steps=found_steps, class_=class_param, type_=type_param, show_user_dropdown=True)
 
 
 @app.route('/incident/save_step', methods=['POST'])
@@ -194,13 +211,20 @@ def save_step():
     if not evidence:
         return jsonify({'error': 'Empty evidence'}), 400
 
-    if 'evidences' not in session:
-        session['evidences'] = {}
-    session['evidences'][step_index] = evidence
+    # Basic session storage
+    session.setdefault('evidences', {})[step_index] = evidence
+    print('EVIDENCE', evidence)
+    session.setdefault('sub_steps', {})[step_index] = checked_substeps
+    print('SUB-STEPS', checked_substeps)
 
-    if 'substeps' not in session:
-        session['substeps'] = {}
-    session['substeps'][step_index] = checked_substeps
+    # Ensure report_data is correctly initialized
+    if 'report_data' not in session:
+        session['report_data'] = {}
+
+    step_index = str(step_index)
+
+    session['report_data'].setdefault('evidences', {})[step_index] = evidence
+    session['report_data'].setdefault('sub_steps', {})[step_index] = checked_substeps
 
     session.modified = True
     return jsonify({'status': 'ok'})
@@ -212,8 +236,6 @@ def save_completion():
     if not username:
         return jsonify({'error': 'Unauthorized'}), 401
 
-
-
     if not request.is_json:
         return jsonify({'error': 'JSON format expected'}), 400
 
@@ -221,55 +243,63 @@ def save_completion():
     improvements = data.get('improvements', '').strip()
     observations = data.get('observations', '').strip()
 
-
     if not improvements or not observations:
         return jsonify({'error': 'All fields must be filled'}), 400
 
     start_time = session.get('start')
-
-    if not start_time:
-        start_time = datetime.now()
-
     if isinstance(start_time, str):
         try:
-            start_time = datetime.strptime(start_time, '%d/%m/%Y %H:%M:%S')
-        except:
+            start_time = datetime.fromisoformat(start_time)
+        except ValueError:
             start_time = datetime.now()
+    elif not start_time:
+        start_time = datetime.now()
 
-    session['end'] = datetime.now()
+    end_time = session.get('end', datetime.now())
+    if isinstance(end_time, str):
+        try:
+            end_time = datetime.fromisoformat(end_time)
+        except ValueError:
+            end_time = datetime.now()
+
+    session['end'] = end_time
     session['lessons'] = {'improvements': improvements, 'observations': observations}
-    session.modified = True
 
     incident_class = session.get('class', 'N/A')
     incident_type = session.get('type', 'N/A')
 
-    new_incident = Incident(
-        name=f"{incident_class} - {incident_type}",
-        creation_date=datetime.now(),
-        status="Completed",
-        improvements=improvements,
-        observations=observations,
-        start_datetime=start_time
-    )
-    db.session.add(new_incident)
-    db.session.commit()
+    try:
+        new_incident = Incident(
+            name=f"{incident_class} - {incident_type}",
+            creation_date=datetime.now(),
+            status="Completed",
+            improvements=improvements,
+            observations=observations,
+            start_datetime=start_time,
+            end_datetime=end_time
+        )
+        db.session.add(new_incident)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Database error: ' + str(e)}), 500
 
     session['id'] = new_incident.id
-
     session['incident_submitted'] = True
-
-    session.modified = True
-
 
     session['report_data'] = {
         'class': incident_class,
         'type': incident_type,
         'steps': session.get('steps', []),
-        'evidences': session.get('evidences', {}),
+        'sub_steps': session.get('sub_steps', {}),  # make sure it's dict, not list
+        'evidences': session.get('evidences', {}),  # same here
+        'attachments': session.get('attachments', {})  # same here
     }
 
+    session.modified = True
 
     return '', 204
+
 
 
 @app.route('/incident/complete', methods=['GET', 'POST'])
@@ -278,21 +308,50 @@ def complete():
     if not username:
         return redirect(url_for('index'))
 
-    incident_id = session.get('id')
-    if not incident_id:
-        incident_id = '1'
+    incident_id = session.get('incident_id', '1')
 
     return render_template('complete.html', show_user_dropdown=True, incident_id=incident_id)
+
+
+@app.route('/incident/upload_file', methods=['POST'])
+def upload_file():
+    step_index = request.form['step']
+    file = request.files['file']
+    ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'txt'}
+
+    def allowed_file(filename):
+        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        upload_folder = os.path.join('uploads', step_index)
+        os.makedirs(upload_folder, exist_ok=True)
+        file_path = os.path.join(upload_folder, filename)
+        file.save(file_path)
+
+        # Store file path in session
+        if 'report_data' not in session:
+            session['report_data'] = {}
+        if 'attachments' not in session['report_data']:
+            session['report_data']['attachments'] = {}
+        if step_index not in session['report_data']['attachments']:
+            session['report_data']['attachments'][step_index] = []
+        session['report_data']['attachments'][step_index].append(file_path)
+        session.modified = True
+
+        return jsonify({'status': 'success'})
+    return jsonify({'status': 'fail'})
 
 
 class PDF(FPDF):
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
-        self.cell(0, 10, 'Este relatório foi gerado automaticamente por esta aplicação', align='L')
+        self.cell(0, 10, 'This report was automatically generated by this application', align='L')
         self.set_y(-15)
         self.set_x(-40)
-        self.cell(0, 10, f'Página {self.page_no()} de {{nb}}', align='R')
+        self.cell(0, 10, f'Page {self.page_no()} of {{nb}}', align='R')
+
 
 @app.route('/download_report')
 def download_report():
@@ -305,76 +364,150 @@ def download_report():
         return redirect(url_for('dashboard'))
 
     pdf = PDF()
-    pdf.alias_nb_pages()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    # Registrar a fonte Oktah
-    # font_path = os.path.join('static', 'fonts', 'Fontspring-DEMO-oktah_regular-BF651105f8625b4.ttf')
-    # pdf.add_font('Arial', '', font_path, uni=True)
-    # pdf.set_font("Arial", '', 12)
-
-    # Título
+    # Title
     pdf.set_font("Arial", 'B', 18)
     pdf.cell(0, 10, "Incident Report", ln=True, align="C")
     pdf.ln(10)
 
-    # Informações do incidente
+    # Incident Info
     pdf.set_font("Arial", '', 12)
-    pdf.cell(0, 10, f"Class of Incident: {data.get('class', 'N/A')}", ln=True)
-    pdf.cell(0, 10, f"Type of Incident: {data.get('type', 'N/A')}", ln=True)
+    pdf.cell(0, 10, f"Incident Class: {data.get('class', 'N/A')}", ln=True)
+    pdf.cell(0, 10, f"Incident Type: {data.get('type', 'N/A')}", ln=True)
 
-    # Datas
+    # Dates
     start_dt = session.get('start')
-    start_str = datetime.strptime(start_dt, '%Y-%m-%d %H:%M:%S').strftime('%d/%m/%Y %H:%M:%S') if isinstance(start_dt, str) else str(start_dt)
-    pdf.cell(0, 10, f"Início: {start_str}", ln=True)
+    if isinstance(start_dt, str):
+        try:
+            start_dt = datetime.strptime(start_dt, '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            start_dt = datetime.now()
+    start_str = start_dt.strftime('%m/%d/%Y %H:%M:%S')
 
     end_dt = session.get('end')
-    end_str = datetime.strptime(end_dt, '%Y-%m-%d %H:%M:%S').strftime('%d/%m/%Y %H:%M:%S') if isinstance(end_dt, str) else str(end_dt)
-    pdf.cell(0, 10, f"Término: {end_str}", ln=True)
+    if isinstance(end_dt, str):
+        try:
+            end_dt = datetime.strptime(end_dt, '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            end_dt = datetime.now()
+    end_str = end_dt.strftime('%m/%d/%Y %H:%M:%S')
 
+    pdf.cell(0, 10, f"Start: {start_str}", ln=True)
+    pdf.cell(0, 10, f"End: {end_str}", ln=True)
     pdf.ln(10)
 
-    # Etapas executadas
+    # Executed Steps Section
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, "Executed Steps", ln=True)
+    pdf.set_fill_color(200, 220, 255)
+    pdf.cell(0, 10, "Executed Steps", ln=True, fill=True)
     pdf.ln(5)
 
-    for idx, step in enumerate(data.get('steps', [])):
-        evidences = data.get('evidences', {})
-        evidence_text = evidences.get(str(idx), '')
-        evidence_lines = evidence_text.split('\n')
-        checked = substeps.get(str(idx), [])
-        if checked:
-            pdf.set_font("Arial", 'I', 11)
-            pdf.multi_cell(0, 8, f"✔️ Sub-steps completed: {', '.join(checked)}")
+    steps = data.get('steps', [])
+    evidences = data.get('evidences', {})
+    substeps = data.get('sub_steps', {})
+    attachments = data.get('attachments', {})
 
+    for idx, step in enumerate(steps):
+        step_text = step.get('step') if isinstance(step, dict) else str(step)
+        substep_list = step.get('sub_steps', []) if isinstance(step, dict) else []
+
+        # Step header
         pdf.set_font("Arial", 'B', 12)
-        pdf.multi_cell(0, 10, f"Step {idx + 1}: {step}")
-        pdf.set_font("Arial", '', 12)
-        for line in evidence_lines:
-            pdf.multi_cell(0, 8, f"  Evidence: {line}")
+        pdf.set_fill_color(240, 248, 255)
+        pdf.multi_cell(0, 8, f"Step {idx + 1}: {step_text}", fill=True)
+
+        # Sub-steps
+        checked = substeps.get(str(idx), []) if isinstance(substeps, dict) else (
+            substeps[idx] if idx < len(substeps) else [])
+        print("Substeps data:", substeps)
+        print("Step idx:", idx, "Checked substeps:", checked)
+
+        pdf.ln(5)
+
+        if substep_list:
+            pdf.set_font("Arial", '', 11)
+            for sub in substep_list:
+                if sub in checked:
+                    pdf.set_text_color(0, 128, 0)  # Green
+                    page_width = pdf.w - pdf.l_margin - pdf.r_margin
+                    pdf.multi_cell(page_width, 6, f"️o {sub}")
+                    pdf.ln(5)
+                else:
+                    pdf.set_text_color(180, 0, 0)  # Red
+                    page_width = pdf.w - pdf.l_margin - pdf.r_margin
+                    pdf.multi_cell(page_width, 6, f"x {sub}")
+                    pdf.ln(5)
+
+            pdf.set_text_color(0, 0, 0)
+
+        pdf.ln(10)
+
+        # Evidence
+        evidence_text = evidences.get(idx, '') if isinstance(evidences, dict) else (
+            evidences[idx] if idx < len(evidences) else '')
+
+        if evidence_text:
+            pdf.set_font("Arial", '', 11)
+            pdf.set_text_color(0, 0, 80)
+            page_width = pdf.w - pdf.l_margin - pdf.r_margin
+            pdf.multi_cell(page_width, 6, f"Evidence:\n{evidence_text}")
+            pdf.set_text_color(0, 0, 0)
+
+        # Attachments
+        attached_files = attachments.get(idx, []) if isinstance(attachments, dict) else (
+            attachments[idx] if isinstance(attachments, list) and idx < len(attachments) else [])
+
+        if attached_files:
+            for filepath in attached_files:
+                ext = os.path.splitext(filepath)[1].lower()
+                try:
+                    if ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                        # Insert image if fits width
+                        pdf.ln(3)
+                        max_width = pdf.w - pdf.l_margin - pdf.r_margin
+                        max_height = 100  # max height to keep page layout stable
+                        pdf.image(filepath, w=max_width, h=max_height)
+                        pdf.ln(5)
+                    else:
+                        # For non-images, just show filename (or you can embed as link if hosted)
+                        pdf.set_font("Arial", 'I', 10)
+                        filename = os.path.basename(filepath)
+                        pdf.multi_cell(0, 6, f"Attachment (not displayed): {filename}")
+                        pdf.set_font("Arial", '', 11)
+                except Exception as e:
+                    # If file missing or error, print warning in PDF
+                    pdf.set_font("Arial", 'I', 10)
+                    pdf.set_text_color(180, 0, 0)
+                    pdf.multi_cell(0, 6, f"Could not load attachment: {os.path.basename(filepath)}")
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.set_font("Arial", '', 11)
+
         pdf.ln(3)
 
-    pdf.ln(10)
+    # Lessons Learned Section
+    pdf.ln(5)
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, "Lessons Learned", ln=True)
+    pdf.set_fill_color(200, 220, 255)
+    pdf.cell(0, 10, "Lessons Learned", ln=True, fill=True)
     pdf.ln(5)
     pdf.set_font("Arial", '', 12)
     lessons = session.get('lessons', {})
     improvements = lessons.get('improvements', '')
     observations = lessons.get('observations', '')
-    pdf.multi_cell(0, 10, f"Improvements:\n{improvements}")
-    pdf.ln(5)
-    pdf.multi_cell(0, 10, f"Observations:\n{observations}")
+    pdf.multi_cell(0, 8, f"Improvements:\n{improvements}")
+    pdf.ln(3)
+    pdf.multi_cell(0, 8, f"Observations:\n{observations}")
 
-    current_date = datetime.now().strftime('%d-%m-%Y')
+    # Generate PDF
+    pdf_buffer = io.BytesIO()
+    pdf.output(pdf_buffer)
+    pdf_buffer.seek(0)
+
+    current_date = datetime.now().strftime('%Y-%m-%d')
     incident_type = data.get('type', 'incident').replace(' ', '_').lower()
     filename = f"report_{current_date}_{incident_type}.pdf"
-
-    pdf_output = pdf.output(dest='S').encode('latin1')
-    pdf_buffer = io.BytesIO(pdf_output)
-    pdf_buffer.seek(0)
 
     return send_file(pdf_buffer, download_name=filename, as_attachment=True)
 

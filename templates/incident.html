@@ -134,17 +134,18 @@
     <div class="card-custom">
       <h3>Incident Report</h3>
 
-      <form action="/incident/steps" method="POST" id="incidentForm" novalidate>
+      <form action="{{ url_for('incident') }}" method="POST" id="incidentForm" novalidate>
         <!-- Incident Class -->
         <div class="mb-3">
           <label for="class" class="form-label">Incident Class</label>
           <select name="class" id="class" class="form-select" aria-describedby="classHelp" required>
-            <option value="" disabled selected>Select</option>
+            <option value="" disabled {% if not class_ %}selected{% endif %}>Select here a class</option>
             {% for incident in incidents %}
-            <option value="{{ incident.class }}" {% if incident.class == class %}selected{% endif %}>{{ incident.class }}</option>
+            <option value="{{ incident.class }}" {% if class_ is defined and incident.class == class_ %}selected{% endif %}>{{ incident.class }}</option>
+
             {% endfor %}
           </select>
-          <div id="classHelp" class="form-text">Choose first the class of incident.</div>
+          <div id="classHelp" class="form-text">Choose first the incident class.</div>
         </div>
 
         <!-- Incident Type -->
@@ -157,23 +158,25 @@
         </div>
 
         <div class="d-grid">
-          <button type="submit" class="btn btn-purple" disabled id="submitBtn">Submit</button>
+          <button type="submit" class="btn btn-purple" id="submitBtn" disabled>Submit</button>
         </div>
       </form>
     </div>
   </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
 <script>
   const incidents = {{ incidents | tojson }};
-  const currentClass = "{{ class | default('') }}";
-  const currentType = "{{ type | default('') }}";
+  const currentClass = "{{ class_ | default('') }}";
+  const currentType = "{{ type_ | default('') }}";
 
   const classSelect = document.getElementById('class');
   const typeSelect = document.getElementById('type');
   const submitBtn = document.getElementById('submitBtn');
+
+  function updateSubmitButton() {
+    submitBtn.disabled = !(classSelect.value && typeSelect.value);
+  }
 
   function updateTypes() {
     const selectedClass = classSelect.value;
@@ -187,33 +190,31 @@
     }
 
     const foundClass = incidents.find(inc => inc.class === selectedClass);
-    if (foundClass && foundClass.types && foundClass.types.length > 0) {
-      typeSelect.disabled = false;
-      const defaultOption = document.createElement('option');
-      defaultOption.value = '';
-      defaultOption.textContent = 'Select a type';
-      defaultOption.disabled = true;
-      defaultOption.selected = true;
-      typeSelect.appendChild(defaultOption);
 
-      foundClass.types.forEach(type => {
-        const typeName = (typeof type === 'string') ? type : type.type;
-        const option = document.createElement('option');
-        option.value = typeName;
-        option.textContent = typeName;
-        if (typeName === currentType) {
-          option.selected = true;
-        }
-        typeSelect.appendChild(option);
-      });
-    } else {
+    if (!foundClass || !foundClass.types || foundClass.types.length === 0) {
       typeSelect.innerHTML = '<option value="">No types available</option>';
+      updateSubmitButton();
+      return;
     }
-    updateSubmitButton();
-  }
 
-  function updateSubmitButton() {
-    submitBtn.disabled = !(classSelect.value && typeSelect.value);
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select a type';
+    defaultOption.disabled = true;
+    defaultOption.selected = true;
+    typeSelect.appendChild(defaultOption);
+
+    foundClass.types.forEach(type => {
+      const typeName = typeof type === 'string' ? type : type.type;
+      const option = document.createElement('option');
+      option.value = typeName;
+      option.textContent = typeName;
+
+      typeSelect.appendChild(option);
+    });
+
+    typeSelect.disabled = false;
+    updateSubmitButton();
   }
 
   classSelect.addEventListener('change', () => {
@@ -224,20 +225,11 @@
   typeSelect.addEventListener('change', updateSubmitButton);
 
   document.addEventListener('DOMContentLoaded', () => {
-    if (currentClass) {
-      classSelect.value = currentClass;
-      updateTypes();
-      if (currentType) {
-        typeSelect.value = currentType;
-      }
-    } else {
-      typeSelect.innerHTML = '<option value="">Select a class first</option>';
-      typeSelect.disabled = true;
-    }
     updateSubmitButton();
   });
 
   function toggleDropdown() {
+    console.log("aaaa");
     document.getElementById("dropdown-content").classList.toggle("show");
   }
 
@@ -248,4 +240,5 @@
   });
 </script>
 {% endblock %}
+
 
