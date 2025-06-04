@@ -3,12 +3,6 @@
 
 {% block content %}
 <style>
-  body {
-    font-family: 'Inter', sans-serif;
-    background-color: #f3f4f6;
-    color: #1f2937;
-  }
-
   .card-custom {
     background-color: white;
     border-radius: 16px;
@@ -71,34 +65,36 @@
 
 <div class="row justify-content-center">
   <div class="col-md-6">
-    <div class="card-custom text-center">
-      <h2 class="mb-4">Incident Response Plan</h2>
-      <form method="POST" action="{{ url_for('login') }}">
+    <div class="card-custom text-center" role="form" aria-labelledby="login-title">
+      <h2 id="login-title" class="mb-4">Incident Response Plan</h2>
+
+      <form method="POST" action="{{ url_for('login') }}" aria-describedby="login-instructions">
         <div class="mb-3">
           <label for="username" class="form-label w-100">User</label>
           <input type="text"
                  id="username"
-                 class="form-control mx-auto text-center"
                  name="username"
+                 class="form-control mx-auto text-center"
                  required
-                 aria-label="Utilizador"
+                 aria-label="User"
                  style="max-width: 300px;">
         </div>
+
         <div class="mb-3">
           <label for="password" class="form-label w-100">Password</label>
           <input type="password"
                  id="password"
-                 class="form-control mx-auto text-center"
                  name="password"
+                 class="form-control mx-auto text-center"
                  required
-                 aria-label="Senha"
+                 aria-label="Password"
                  style="max-width: 300px;">
         </div>
 
         {% if message %}
-          <div class="alert alert-danger mt-3" role="alert">
-            {{ message }}
-          </div>
+        <div class="alert alert-danger mt-3" role="alert">
+          {{ message }}
+        </div>
         {% endif %}
 
         <div class="d-grid justify-content-center mt-4">
@@ -118,3 +114,4 @@
   </div>
 </div>
 {% endblock %}
+

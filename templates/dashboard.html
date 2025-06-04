@@ -1,235 +1,209 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Dashboard - Incident Response Plan</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      background: linear-gradient(to right, #f3f4f6, #f9fafb);
-      margin: 0;
-      padding: 30px;
-      color: #1f2937;
-    }
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
 
-    h1, h2 {
-      text-align: center;
-      margin: 0;
-    }
+{% block content %}
+<style>
+  body {
+    background: linear-gradient(to right, #f3f4f6, #f9fafb);
+    padding: 30px;
+    color: #1f2937;
+  }
 
-    h1 {
-      font-size: 2.4rem;
-      color: #6b00c2;
-      font-weight: 700;
-    }
+  h1 {
+    font-size: 2.4rem;
+    color: #6b00c2;
+    font-weight: 700;
+    text-align: center;
+  }
 
-    h2 {
-      font-size: 1.2rem;
-      margin-bottom: 30px;
-      font-weight: 400;
-      color: #4b5563;
-    }
+  h2 {
+    font-size: 1.2rem;
+    color: #4b5563;
+    text-align: center;
+    margin-bottom: 30px;
+    font-weight: 400;
+  }
 
-    .user-menu {
-      position: absolute;
-      top: 20px;
-      right: 30px;
-      z-index: 1000;
-    }
+  .user-menu {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+  }
 
-    .user-toggle {
-      background-color: #6b00c2;
-      color: white;
-      padding: 10px 18px;
-      border: none;
-      border-radius: 30px;
-      font-size: 14px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      transition: background-color 0.3s ease;
-    }
+  .user-toggle {
+    background-color: #6b00c2;
+    color: white;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  }
 
-    .user-toggle:hover {
-      background-color: #560099;
-    }
+  .user-toggle:hover {
+    background-color: #560099;
+  }
 
-    .user-dropdown-content {
-      display: none;
-      position: absolute;
-      top: 46px;
-      right: 0;
-      background-color: white;
-      border-radius: 10px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-      min-width: 140px;
-      overflow: hidden;
-    }
+  .user-dropdown-content {
+    display: none;
+    position: absolute;
+    top: 46px;
+    right: 0;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    min-width: 140px;
+    overflow: hidden;
+  }
 
-    .user-dropdown-content a {
-      color: #1f2937;
-      padding: 10px 16px;
-      text-decoration: none;
-      display: block;
-      font-size: 14px;
-      transition: background-color 0.2s;
-    }
+  .user-dropdown-content a {
+    color: #1f2937;
+    padding: 10px 16px;
+    text-decoration: none;
+    display: block;
+    font-size: 14px;
+  }
 
-    .user-dropdown-content a:hover {
-      background-color: #f3f4f6;
-    }
+  .user-dropdown-content a:hover {
+    background-color: #f3f4f6;
+  }
 
-    .show {
-      display: block;
-    }
+  .show {
+    display: block;
+  }
 
-    .top-bar {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 25px;
-    }
+  .top-bar {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 25px;
+  }
 
-    .btn-new {
-      background-color: #10b981;
-      color: white;
-      padding: 12px 26px;
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: none;
-      transition: background-color 0.3s;
-    }
+  .btn-new {
+    background-color: #10b981;
+    color: white;
+    padding: 12px 26px;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+  }
 
-    .btn-new:hover {
-      background-color: #059669;
-    }
+  .btn-new:hover {
+    background-color: #059669;
+  }
 
-    table {
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 0;
-      border-radius: 14px;
-      overflow: hidden;
-      background: white;
-      box-shadow: 0 3px 20px rgba(0, 0, 0, 0.06);
-    }
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: 14px;
+    overflow: hidden;
+    background: white;
+    box-shadow: 0 3px 20px rgba(0, 0, 0, 0.06);
+  }
 
-    thead tr {
-      background: #6b00c2;
-      color: white;
-    }
+  thead tr {
+    background: #6b00c2;
+    color: white;
+  }
 
-    thead th {
-      padding: 16px;
-      text-align: center;
-      font-weight: 600;
-      font-size: 15px;
-    }
+  thead th, tbody td {
+    padding: 14px 18px;
+    text-align: center;
+    font-size: 14px;
+  }
 
-    tbody tr {
-      transition: background-color 0.3s;
-    }
+  tbody tr:nth-child(even) {
+    background-color: #f9fafb;
+  }
 
-    tbody tr:nth-child(even) {
-      background-color: #f9fafb;
-    }
+  tbody tr:hover {
+    background-color: #f3e8ff;
+  }
 
-    tbody tr:hover {
-      background-color: #f3e8ff;
-    }
+  .btn-delete {
+    background: none;
+    border: none;
+    color: #ef4444;
+    font-size: 20px;
+    cursor: pointer;
+  }
 
-    tbody td {
-      padding: 14px 18px;
-      text-align: center;
-      font-size: 14px;
-    }
+  .btn-delete:hover {
+    color: #b91c1c;
+  }
 
-    .btn-delete {
-      background: none;
-      border: none;
-      color: #ef4444;
-      font-size: 20px;
-      cursor: pointer;
-      transition: color 0.3s;
-    }
+  #confirmModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.4);
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  }
 
-    .btn-delete:hover {
-      color: #b91c1c;
-    }
+  #confirmModal .modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 14px;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+  }
 
-    #confirmModal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background-color: rgba(0, 0, 0, 0.4);
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-    }
+  #confirmModal p {
+    font-size: 17px;
+    margin-bottom: 25px;
+    color: #1f2937;
+  }
 
-    #confirmModal .modal-content {
-      background: white;
-      padding: 30px;
-      border-radius: 14px;
-      max-width: 400px;
-      text-align: center;
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
-    }
+  #confirmModal button {
+    padding: 10px 22px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 15px;
+    margin: 0 10px;
+  }
 
-    #confirmModal p {
-      font-size: 17px;
-      margin-bottom: 25px;
-      color: #1f2937;
-    }
+  #btnYes {
+    background-color: #dc2626;
+    color: white;
+  }
 
-    #confirmModal button {
-      padding: 10px 22px;
-      border: none;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-      font-size: 15px;
-      margin: 0 10px;
-    }
+  #btnYes:hover {
+    background-color: #991b1b;
+  }
 
-    #btnYes {
-      background-color: #dc2626;
-      color: white;
-    }
+  #btnNo {
+    background-color: #6b7280;
+    color: white;
+  }
 
-    #btnYes:hover {
-      background-color: #991b1b;
-    }
-
-    #btnNo {
-      background-color: #6b7280;
-      color: white;
-    }
-
-    #btnNo:hover {
-      background-color: #4b5563;
-    }
-  </style>
-</head>
-<body>
+  #btnNo:hover {
+    background-color: #4b5563;
+  }
+</style>
 
 {% if show_user_dropdown %}
 <div class="user-menu">
-  <button class="user-toggle" onclick="toggleDropdown()">
+  <button class="user-toggle" onclick="toggleDropdown()" aria-haspopup="true" aria-expanded="false" aria-label="User menu">
     <span class="user-name">{{ session['username'] }}</span>
     <span class="chevron">▾</span>
   </button>
-  <div id="dropdown-content" class="user-dropdown-content">
-    <a href="{{ url_for('logout') }}">🚪 Logout</a>
+  <div id="dropdown-content" class="user-dropdown-content" role="menu">
+    <a href="{{ url_for('logout') }}" role="menuitem">🚪 Logout</a>
   </div>
 </div>
 {% endif %}
@@ -238,7 +212,7 @@
 <h2>Your active incident records</h2>
 
 <div class="top-bar">
-  <a href="/incident" class="btn-new">➕ New Record</a>
+  <a href="{{ url_for('incident') }}" class="btn-new">➕ New Record</a>
 </div>
 
 <table>
@@ -255,7 +229,7 @@
     {% for incident in incidents %}
     <tr>
       <td>
-        <button class="btn-delete" data-id="{{ incident.id }}" title="Delete">🗑️</button>
+        <button class="btn-delete" data-id="{{ incident.id }}" title="Delete incident {{ incident.id }}" aria-label="Delete incident {{ incident.id }}">🗑️</button>
       </td>
       <td>{{ incident.id }}</td>
       <td>{{ incident.name }}</td>
@@ -267,9 +241,9 @@
 </table>
 
 <!-- Confirmation Modal -->
-<div id="confirmModal">
+<div id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmText">
   <div class="modal-content">
-    <p>Are you sure you want to delete this record?</p>
+    <p id="confirmText">Are you sure you want to delete this record?</p>
     <button id="btnYes">Yes</button>
     <button id="btnNo">No</button>
   </div>
@@ -277,7 +251,8 @@
 
 <script>
   function toggleDropdown() {
-    document.getElementById("dropdown-content").classList.toggle("show");
+    const dropdown = document.getElementById("dropdown-content");
+    dropdown.classList.toggle("show");
   }
 
   window.addEventListener('click', function(event) {
@@ -339,9 +314,7 @@
     return cookieValue;
   }
 </script>
-
-</body>
-</html>
+{% endblock %}
 
 
 

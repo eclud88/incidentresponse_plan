@@ -10,7 +10,7 @@ import json
 
 
 app = Flask(__name__)
-app.secret_key = 'secret_key_1234'
+app.secret_key = os.environ.get('SECRET_KEY', 'fallback-dev-key')
 
 
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -54,8 +54,7 @@ def load_incident_steps():
         return json.load(f)
 
 
-@app.before_request
-def create_tables():
+with app.app_context():
     db.create_all()
 
 
@@ -180,9 +179,9 @@ def steps():
     # Match steps
     found_steps = []
     for item in incident_steps:
-        if item.get('class', '').lower() == class_param.lower():
+        if item.get('class', '').strip().lower() == class_param.strip().lower():
             for type_item in item.get('types', []):
-                if type_item.get('type', '').lower() == type_param.lower():
+                if type_item.get('type', '').strip().lower() == type_param.strip().lower():
                     found_steps = type_item.get('steps', [])
                     break
 
@@ -204,29 +203,35 @@ def save_step():
         return jsonify({'error': 'Unauthorized'}), 401
 
     data = request.get_json()
-    step_index = str(data.get('step'))
-    evidence = data.get('evidence', '').strip()
-    checked_substeps = data.get('checked_substeps', [])
 
+    try:
+        step_index = str(int(data.get('step', -1)))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid step index'}), 400
+
+    evidence = data.get('evidence', '').strip()
     if not evidence:
         return jsonify({'error': 'Empty evidence'}), 400
 
-    # Basic session storage
-    session.setdefault('evidences', {})[step_index] = evidence
-    print('EVIDENCE', evidence)
-    session.setdefault('sub_steps', {})[step_index] = checked_substeps
-    print('SUB-STEPS', checked_substeps)
+    checked_substeps = data.get('checked_substeps', [])
+    if not isinstance(checked_substeps, list):
+        return jsonify({'error': 'Invalid substeps format'}), 400
 
-    # Ensure report_data is correctly initialized
-    if 'report_data' not in session:
-        session['report_data'] = {}
 
-    step_index = str(step_index)
 
-    session['report_data'].setdefault('evidences', {})[step_index] = evidence
-    session['report_data'].setdefault('sub_steps', {})[step_index] = checked_substeps
+    # Store evidence and sub-steps in top-level session keys
+    evidences = session.setdefault('evidences', {})
+    sub_steps = session.setdefault('sub_steps', {})
+
+    evidences[step_index] = evidence
+    sub_steps[step_index] = checked_substeps
 
     session.modified = True
+
+    print(f"Saved step {step_index}:")
+    print(f"- Evidence: {evidence}")
+    print(f"- Sub-steps: {checked_substeps}")
+
     return jsonify({'status': 'ok'})
 
 
@@ -265,6 +270,7 @@ def save_completion():
     session['end'] = end_time
     session['lessons'] = {'improvements': improvements, 'observations': observations}
 
+
     incident_class = session.get('class', 'N/A')
     incident_type = session.get('type', 'N/A')
 
@@ -291,14 +297,14 @@ def save_completion():
         'class': incident_class,
         'type': incident_type,
         'steps': session.get('steps', []),
-        'sub_steps': session.get('sub_steps', {}),  # make sure it's dict, not list
-        'evidences': session.get('evidences', {}),  # same here
-        'attachments': session.get('attachments', {})  # same here
+        'sub_steps': session.get('sub_steps', {}),
+        'evidences': session.get('evidences', {}),
+        'attachments': session.get('attachments', {})
     }
 
     session.modified = True
 
-    return '', 204
+    return jsonify({'status': 'success'}), 200
 
 
 
@@ -309,6 +315,7 @@ def complete():
         return redirect(url_for('index'))
 
     incident_id = session.get('incident_id', '1')
+    print('incident ID:' , incident_id)
 
     return render_template('complete.html', show_user_dropdown=True, incident_id=incident_id)
 
@@ -334,8 +341,11 @@ def upload_file():
             session['report_data'] = {}
         if 'attachments' not in session['report_data']:
             session['report_data']['attachments'] = {}
-        if step_index not in session['report_data']['attachments']:
-            session['report_data']['attachments'][step_index] = []
+        step_index_str = str(step_index)
+        if step_index_str not in session['report_data']['attachments']:
+            session['report_data']['attachments'][step_index_str] = []
+        session['report_data']['attachments'][step_index_str].append(file_path)
+
         session['report_data']['attachments'][step_index].append(file_path)
         session.modified = True
 
@@ -381,7 +391,7 @@ def download_report():
     start_dt = session.get('start')
     if isinstance(start_dt, str):
         try:
-            start_dt = datetime.strptime(start_dt, '%Y-%m-%d %H:%M:%S')
+            start_dt = datetime.fromisoformat(start_dt)
         except ValueError:
             start_dt = datetime.now()
     start_str = start_dt.strftime('%m/%d/%Y %H:%M:%S')
@@ -493,6 +503,9 @@ def download_report():
     pdf.cell(0, 10, "Lessons Learned", ln=True, fill=True)
     pdf.ln(5)
     pdf.set_font("Arial", '', 12)
+
+    pdf.set_auto_page_break(auto=True, margin=15)
+
     lessons = session.get('lessons', {})
     improvements = lessons.get('improvements', '')
     observations = lessons.get('observations', '')
@@ -515,6 +528,23 @@ def download_report():
 @app.before_request
 def make_session_permanent():
     session.permanent = True
+
+
+@app.route('/.well-known/appspecific/com.chrome.devtools.json', methods=['GET'])
+def devtools_json():
+    return jsonify({"status": "ok"}), 200
+
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
+
+
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
+
+
 
 
 if __name__ == '__main__':
