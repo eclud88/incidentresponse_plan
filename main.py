@@ -3,7 +3,6 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 from fpdf import FPDF
-from PIL import Image
 import os
 import io
 import json
@@ -324,7 +323,7 @@ def complete():
 def upload_file():
     step_index = request.form['step']
     file = request.files['file']
-    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+    ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'bmp'}
 
     def allowed_file(filename):
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -346,7 +345,6 @@ def upload_file():
             session['report_data']['attachments'][step_index_str] = []
         session['report_data']['attachments'][step_index_str].append(file_path)
 
-        session['report_data']['attachments'][step_index].append(file_path)
         session.modified = True
 
         return jsonify({'status': 'success'})
@@ -378,14 +376,13 @@ def download_report():
     pdf = PDF()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    pdf.add_font("Oktah", "", "static/fonts/Fontspring-DEMO-oktah_regular-BF651105f8625b4.ttf", uni=True)
-    pdf.add_font("Oktah", "", font_path, uni=True)  # Regular
-    pdf.add_font("Oktah", "B", font_path, uni=True)  # Bold
-    pdf.add_font("Oktah", "I", font_path, uni=True)  # Italic
-    pdf.add_font("Oktah", "BI", font_path, uni=True)  # Bold-Italic
+    # Register fonts
+    pdf.add_font("Oktah", "", font_path, uni=True)
+    pdf.add_font("Oktah", "B", font_path, uni=True)
+    pdf.add_font("Oktah", "I", font_path, uni=True)
+    pdf.add_font("Oktah", "BI", font_path, uni=True)
 
     pdf.add_page()
-
     pdf.set_font("Oktah", size=14)
 
     # Title
@@ -400,26 +397,25 @@ def download_report():
 
     # Dates
     start_dt = session.get('start')
+    end_dt = session.get('end')
+
     if isinstance(start_dt, str):
         try:
             start_dt = datetime.fromisoformat(start_dt)
         except ValueError:
             start_dt = datetime.now()
-    start_str = start_dt.strftime('%m/%d/%Y %H:%M:%S')
 
-    end_dt = session.get('end')
     if isinstance(end_dt, str):
         try:
             end_dt = datetime.strptime(end_dt, '%Y-%m-%d %H:%M:%S')
         except ValueError:
             end_dt = datetime.now()
-    end_str = end_dt.strftime('%m/%d/%Y %H:%M:%S')
 
-    pdf.cell(0, 10, f"Start: {start_str}", ln=True)
-    pdf.cell(0, 10, f"End: {end_str}", ln=True)
+    pdf.cell(0, 10, f"Start: {start_dt.strftime('%m/%d/%Y %H:%M:%S')}", ln=True)
+    pdf.cell(0, 10, f"End: {end_dt.strftime('%m/%d/%Y %H:%M:%S')}", ln=True)
     pdf.ln(10)
 
-    # Executed Steps Section
+    # Executed Steps
     pdf.set_font("Oktah", 'B', 14)
     pdf.set_fill_color(200, 220, 255)
     pdf.cell(0, 10, "Executed Steps", ln=True, fill=True)
@@ -434,97 +430,71 @@ def download_report():
         step_text = step.get('step') if isinstance(step, dict) else str(step)
         substep_list = step.get('sub_steps', []) if isinstance(step, dict) else []
 
-        # Step header
+        # Step Title
         pdf.set_font("Oktah", 'B', 12)
         pdf.set_fill_color(240, 248, 255)
         pdf.multi_cell(0, 8, f"Step {idx + 1}: {step_text}", fill=True)
+        pdf.ln(5)
 
         # Sub-steps
-        checked = substeps.get(str(idx), []) if isinstance(substeps, dict) else (
-            substeps[idx] if idx < len(substeps) else [])
-        print("Substeps data:", substeps)
-        print("Step idx:", idx, "Checked substeps:", checked)
-
-        pdf.ln(5)
+        checked = substeps.get(str(idx), []) if isinstance(substeps, dict) else []
 
         if substep_list:
             pdf.set_font("Oktah", '', 11)
             for sub in substep_list:
+                page_width = pdf.w - pdf.l_margin - pdf.r_margin
                 if sub in checked:
-                    pdf.set_text_color(0, 128, 0)  # Green
-                    page_width = pdf.w - pdf.l_margin - pdf.r_margin
-                    pdf.multi_cell(page_width, 6, f"️o {sub}")
-                    pdf.ln(5)
+                    pdf.set_text_color(0, 128, 0)
+                    pdf.multi_cell(page_width, 6, f"✔ {sub}")
                 else:
-                    pdf.set_text_color(180, 0, 0)  # Red
-                    page_width = pdf.w - pdf.l_margin - pdf.r_margin
-                    pdf.multi_cell(page_width, 6, f"x {sub}")
-                    pdf.ln(5)
-
+                    pdf.set_text_color(180, 0, 0)
+                    pdf.multi_cell(page_width, 6, f"✘ {sub}")
+                pdf.ln(1)
             pdf.set_text_color(0, 0, 0)
+        pdf.ln(5)
 
-        pdf.ln(10)
-
-        evidence_text = ''
-        if isinstance(evidences, dict):
-            evidence_text = evidences.get(str(idx), '')
-
+        # Evidence
+        evidence_text = evidences.get(str(idx), '') if isinstance(evidences, dict) else ''
         if evidence_text:
             pdf.set_font("Oktah", '', 11)
             pdf.set_text_color(0, 0, 80)
-            page_width = pdf.w - pdf.l_margin - pdf.r_margin
-            pdf.multi_cell(page_width, 6, f"Evidence:\n{evidence_text}")
+            pdf.multi_cell(0, 6, f"📝 Evidence:\n{evidence_text}")
             pdf.set_text_color(0, 0, 0)
+            pdf.ln(5)
 
         # Attachments
         attached_files = attachments.get(str(idx), []) if isinstance(attachments, dict) else []
-
-
-        if attached_files:
-            for filepath in attached_files:
-                ext = os.path.splitext(filepath)[1].lower()
-                try:
-                    if ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
-                        # Insert image if fits width
-                        pdf.ln(3)
-                        max_width = pdf.w - pdf.l_margin - pdf.r_margin
-                        max_height = 100  # max height to keep page layout stable
-                        pdf.image(filepath, w=max_width, h=max_height)
+        for relative_path in attached_files:
+            ext = os.path.splitext(relative_path)[1].lower()
+            if ext in ['.png', '.jpg', '.jpeg', '.bmp', '.gif']:
+                full_path = os.path.join(app.root_path, relative_path)
+                if os.path.exists(full_path):
+                    try:
+                        pdf.image(full_path, w=120)
                         pdf.ln(5)
-                    else:
-                        # For non-images, just show filename (or you can embed as link if hosted)
-                        pdf.set_font("Oktah", 'I', 10)
-                        filename = os.path.basename(filepath)
-                        pdf.multi_cell(0, 6, f"Attachment (not displayed): {filename}")
-                        pdf.set_font("Oktah", '', 11)
-                except Exception as e:
-                    # If file missing or error, print warning in PDF
-                    pdf.set_font("Oktah", 'I', 10)
-                    pdf.set_text_color(180, 0, 0)
-                    pdf.multi_cell(0, 6, f"Could not load attachment: {os.path.basename(filepath)}")
-                    pdf.set_text_color(0, 0, 0)
-                    pdf.set_font("Oktah", '', 11)
+                    except Exception as e:
+                        pdf.set_text_color(255, 0, 0)
+                        pdf.cell(0, 10, f"⚠️ Error loading image: {os.path.basename(relative_path)}", ln=True)
+                        pdf.set_text_color(0, 0, 0)
 
-        pdf.ln(3)
+        pdf.ln(5)
 
-    # Lessons Learned Section
-    pdf.ln(5)
+    # Lessons Learned
     pdf.set_font("Oktah", 'B', 14)
     pdf.set_fill_color(200, 220, 255)
-    pdf.cell(0, 10, "Lessons Learned", ln=True, fill=True)
+    pdf.cell(0, 10, "Lessons Learned", fill=True, ln=True)
     pdf.ln(5)
     pdf.set_font("Oktah", '', 12)
-
-    pdf.set_auto_page_break(auto=True, margin=15)
 
     lessons = session.get('lessons', {})
     improvements = lessons.get('improvements', '')
     observations = lessons.get('observations', '')
+
     pdf.multi_cell(0, 8, f"Improvements:\n{improvements}")
     pdf.ln(3)
     pdf.multi_cell(0, 8, f"Observations:\n{observations}")
 
-    # Generate PDF
+    # Output PDF
     pdf_buffer = io.BytesIO()
     pdf.output(pdf_buffer)
     pdf_buffer.seek(0)
@@ -534,7 +504,6 @@ def download_report():
     filename = f"report_{current_date}_{incident_type}.pdf"
 
     return send_file(pdf_buffer, download_name=filename, as_attachment=True)
-
 
 @app.before_request
 def make_session_permanent():

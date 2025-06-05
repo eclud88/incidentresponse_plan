@@ -25,13 +25,12 @@
           <button id="btnReport" type="submit" class="btn btn-purple fw-bold px-4">
             📄 Generate PDF Report
           </button>
-          <a id="homeButton" href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary fw-bold px-4 disabled"
-             aria-disabled="true" tabindex="-1">
+          <button id="homeButton" type="button" class="btn btn-outline-secondary fw-bold px-4" disabled>
             🔙 Home Page
-          </a>
+          </button>
         </div>
 
-        <div id="statusMsg" class="mt-4 fw-semibold" role="alert"></div>
+        <div id="statusMsg" class="mt-4 fw-semibold" role="alert" aria-live="polite"></div>
       </form>
     </div>
   </div>
@@ -41,6 +40,7 @@
 document.addEventListener('DOMContentLoaded', function () {
   const form = document.getElementById('finalForm');
   const btnReport = document.getElementById('btnReport');
+  const homeBtn = document.getElementById('homeButton');
   const statusMsg = document.getElementById('statusMsg');
   const improvementsInput = document.getElementById('improvements');
   const observationsInput = document.getElementById('observations');
@@ -57,7 +57,13 @@ document.addEventListener('DOMContentLoaded', function () {
   improvementsInput.addEventListener('input', updateButtonState);
   observationsInput.addEventListener('input', updateButtonState);
 
-  updateButtonState(); // initialize
+  updateButtonState(); // initial check
+
+  homeBtn.addEventListener('click', function () {
+    if (!homeBtn.disabled) {
+      window.location.href = "{{ url_for('dashboard') }}";
+    }
+  });
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -71,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     btnReport.disabled = true;
-    btnReport.innerText = "⏳ Generating Report...";
+    btnReport.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span> Generating Report...`;
     statusMsg.innerText = "Please wait while we generate your report...";
 
     fetch('/save_completion', {
@@ -82,7 +88,7 @@ document.addEventListener('DOMContentLoaded', function () {
     .then(response => {
       if (!response.ok) {
         return response.json().then(data => {
-          throw new Error(data.error || "Unknown error");
+          throw new Error(data.error || "Unknown error occurred.");
         });
       }
 
@@ -90,21 +96,29 @@ document.addEventListener('DOMContentLoaded', function () {
       window.open("/download_report", "_blank");
 
       statusMsg.innerText = "✅ Report generated successfully!";
-      btnReport.innerText = "✅ Report Sent";
+      btnReport.innerHTML = "✅ Report Sent";
       btnReport.classList.remove("btn-purple");
       btnReport.classList.add("btn-secondary");
-      updateButtonState();
+
+      improvementsInput.readOnly = true;
+      observationsInput.readOnly = true;
+
+      homeBtn.disabled = false;
+      homeBtn.classList.remove("btn", "btn-outline-secondary");
+      homeBtn.classList.add("btn", "btn-purple");
+
+
     })
     .catch(error => {
       reportAlreadySubmitted = false;
       btnReport.disabled = false;
-      btnReport.innerText = "📄 Generate PDF Report";
-      statusMsg.innerText = "";
+      btnReport.innerHTML = "📄 Generate PDF Report";
+      statusMsg.innerText = "❌ Failed to generate the report. Please try again.";
       alert("❌ Error: " + error.message);
     });
   });
 });
 </script>
 
-
 {% endblock %}
+
