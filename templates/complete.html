@@ -22,7 +22,7 @@
         </div>
 
         <div class="d-flex justify-content-center gap-3 flex-wrap">
-          <button id="btnReport" type="submit" class="btn btn-purple fw-bold px-4" disabled>
+          <button id="btnReport" type="submit" class="btn btn-purple fw-bold px-4">
             📄 Generate PDF Report
           </button>
           <a id="homeButton" href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary fw-bold px-4 disabled"
@@ -36,61 +36,75 @@
     </div>
   </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
 <script>
-  document.addEventListener('DOMContentLoaded', function () {
-    const form = document.getElementById('finalForm');
-    const btnReport = document.getElementById('btnReport');
-    const statusMsg = document.getElementById('statusMsg');
+document.addEventListener('DOMContentLoaded', function () {
+  const form = document.getElementById('finalForm');
+  const btnReport = document.getElementById('btnReport');
+  const statusMsg = document.getElementById('statusMsg');
+  const improvementsInput = document.getElementById('improvements');
+  const observationsInput = document.getElementById('observations');
 
-    let reportAlreadySubmitted = false;
+  let reportAlreadySubmitted = false;
 
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
+  function updateButtonState() {
+    const improvements = improvementsInput.value.trim();
+    const observations = observationsInput.value.trim();
+    const shouldEnable = improvements.length > 0 && observations.length > 0;
+    btnReport.disabled = !shouldEnable || reportAlreadySubmitted;
+  }
 
-      if (reportAlreadySubmitted) return;
+  improvementsInput.addEventListener('input', updateButtonState);
+  observationsInput.addEventListener('input', updateButtonState);
 
-      const improvements = document.getElementById('improvements').value.trim();
-      const observations = document.getElementById('observations').value.trim();
+  updateButtonState(); // initialize
 
-      if (!improvements || !observations) {
-        alert("⚠️ Please fill in all the required fields.");
-        return;
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const improvements = improvementsInput.value.trim();
+    const observations = observationsInput.value.trim();
+
+    if (!improvements || !observations) {
+      alert("⚠️ Please fill in all the required fields.");
+      return;
+    }
+
+    btnReport.disabled = true;
+    btnReport.innerText = "⏳ Generating Report...";
+    statusMsg.innerText = "Please wait while we generate your report...";
+
+    fetch('/save_completion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ improvements, observations })
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(data => {
+          throw new Error(data.error || "Unknown error");
+        });
       }
 
-      btnReport.disabled = true;
-      btnReport.innerText = "⏳ Generating Report...";
-      statusMsg.innerText = "Please wait while we generate your report...";
+      reportAlreadySubmitted = true;
+      window.open("/download_report", "_blank");
 
-      fetch('/save_completion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ improvements, observations })
-      })
-      .then(response => {
-        if (!response.ok) {
-          return response.json().then(data => {
-            throw new Error(data.error || "Error while saving data.");
-          });
-        }
-
-        reportAlreadySubmitted = true;
-        window.open("/download_report", "_blank");
-
-        statusMsg.innerText = "✅ Report generated successfully!";
-        btnReport.innerText = "✅ Report Sent";
-        btnReport.classList.remove("btn-purple");
-        btnReport.classList.add("btn-secondary");
-      })
-      .catch(error => {
-        btnReport.disabled = false;
-        btnReport.innerText = "📄 Generate PDF Report";
-        statusMsg.innerText = "";
-        alert("❌ Error: " + error.message);
-      });
+      statusMsg.innerText = "✅ Report generated successfully!";
+      btnReport.innerText = "✅ Report Sent";
+      btnReport.classList.remove("btn-purple");
+      btnReport.classList.add("btn-secondary");
+      updateButtonState();
+    })
+    .catch(error => {
+      reportAlreadySubmitted = false;
+      btnReport.disabled = false;
+      btnReport.innerText = "📄 Generate PDF Report";
+      statusMsg.innerText = "";
+      alert("❌ Error: " + error.message);
     });
   });
+});
 </script>
+
+
 {% endblock %}
