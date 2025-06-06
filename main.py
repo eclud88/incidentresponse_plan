@@ -144,6 +144,9 @@ def steps():
     if not username:
         return redirect(url_for('index'))
 
+    incident_id = session.get('incident_id') or '1'  # or however you define it
+    session['incident_id'] = incident_id
+
     incident_steps = load_incident_steps()
     if len(incident_steps) == 1 and isinstance(incident_steps[0], list):
         incident_steps = incident_steps[0]
@@ -192,7 +195,7 @@ def steps():
     session['start'] = session.get('start') or datetime.now().isoformat()
     session.modified = True
 
-    return render_template('steps.html', checked_substeps=checked_substeps, steps=found_steps, class_=class_param, type_=type_param, show_user_dropdown=True)
+    return render_template('steps.html', incident_id=incident_id, checked_substeps=checked_substeps, steps=found_steps, class_=class_param, type_=type_param, show_user_dropdown=True)
 
 
 @app.route('/incident/save_step', methods=['POST'])
@@ -319,52 +322,54 @@ def complete():
     return render_template('complete.html', show_user_dropdown=True, incident_id=incident_id)
 
 
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'bmp'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 @app.route('/incident/upload_file', methods=['POST'])
 def upload_file():
-    step_index = request.form['step']
-    file = request.files['file']
-    ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'bmp'}
+    step_index = request.form.get('step')
+    incident_id = session.get('incident_id', '1')
+    file = request.files.get('file')
 
-    def allowed_file(filename):
-        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    if not step_index or not incident_id or not file:
+        return jsonify({
+            'status': 'fail',
+            'message': f'Missing data. step={step_index}, incident_id={incident_id}, file_present={bool(file)}'
+        })
 
-    if file and allowed_file(file.filename):
+    if not allowed_file(file.filename):
+        return jsonify({
+            'status': 'fail',
+            'message': f'File type not allowed: {file.filename}'
+        })
+
+    try:
         filename = secure_filename(file.filename)
-        upload_folder = os.path.join('uploads', step_index)
+        upload_folder = os.path.join(app.root_path, 'uploads', step_index, str(incident_id))
         os.makedirs(upload_folder, exist_ok=True)
+
         file_path = os.path.join(upload_folder, filename)
         file.save(file_path)
+        rel_path = os.path.relpath(file_path, app.root_path)
 
-        # Store file path in session
-        if 'report_data' not in session:
-            session['report_data'] = {}
-        if 'attachments' not in session['report_data']:
-            session['report_data']['attachments'] = {}
-        step_index_str = str(step_index)
-        if step_index_str not in session['report_data']['attachments']:
-            session['report_data']['attachments'][step_index_str] = []
-        session['report_data']['attachments'][step_index_str].append(file_path)
-
-        # Save file
-        uploads_folder = os.path.join(app.root_path, 'uploads', step_index)
-        os.makedirs(uploads_folder, exist_ok=True)
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(uploads_folder, filename)
-        file.save(filepath)
-
-        # Relative path to be stored
-        rel_path = os.path.relpath(filepath, app.root_path)
-
-        # Save to session or DB
         report_data = session.get('report_data', {})
-        attachments = report_data.setdefault('attachments', {}).setdefault('uploads', {})
-        attachments.setdefault(step_index, []).append(rel_path)
-        session['report_data'] = report_data
+        attachments = report_data.setdefault('attachments', {})
+        incident_attachments = attachments.setdefault(str(incident_id), {})
+        step_files = incident_attachments.setdefault(str(step_index), [])
 
+        if rel_path not in step_files:
+            step_files.append(rel_path)
+
+        session['report_data'] = report_data
         session.modified = True
 
         return jsonify({'status': 'success', 'filepath': rel_path})
-    return jsonify({'status': 'fail'})
+    except Exception as e:
+        return jsonify({'status': 'fail', 'message': f'Error: {str(e)}'})
+
+
 
 
 class PDF(FPDF):
@@ -379,7 +384,7 @@ class PDF(FPDF):
 
 @app.route('/download_report')
 def download_report():
-    font_path = "static/fonts/Fontspring-DEMO-oktah_regular-BF651105f8625b4.ttf"  # Ensure this is the full version
+    font_path = "static/fonts/Fontspring-DEMO-oktah_regular-BF651105f8625b4.ttf"
 
     username = session.get('username')
     if not username:
@@ -477,10 +482,14 @@ def download_report():
         # Image attachments
         # attached_files = attachments.get('uploads', {}).get(str(idx), [])
         uploads_root = 'uploads'
-        folder_path = os.path.join(uploads_root, str(idx))  # idx is the current step index
+        incident_id = session.get('incident_id', '1')
+        folder_path = os.path.join(uploads_root, str(idx), str(incident_id))
+
+        print('folder_path: ', folder_path)
 
         if os.path.isdir(folder_path):
             for file in os.listdir(folder_path):
+                print('File:', file)
                 full_path = os.path.join(folder_path, file)
 
                 try:
