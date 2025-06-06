@@ -121,13 +121,23 @@ def incident():
 
     if request.method == 'POST':
         selected_class = request.form.get('class')
-        print('SELECTED CLASS: ', selected_class)
         selected_type = request.form.get('type')
 
         if selected_class and selected_type:
             session['class_'] = selected_class
             session['type_'] = selected_type
             session['start'] = datetime.now()
+
+            # ✅ Create the draft incident here
+            new_incident = Incident(
+                name=f"{selected_class} - {selected_type}",
+                status="Draft",
+                creation_date=datetime.now()
+            )
+            db.session.add(new_incident)
+            db.session.commit()
+
+            session['incident_id'] = new_incident.id  # Store actual ID for uploads & tracking
 
             return redirect(url_for('steps', class_=selected_class, type_=selected_type))
 
@@ -138,14 +148,17 @@ def incident():
     )
 
 
+
 @app.route('/incident/steps', methods=['GET', 'POST'])
 def steps():
     username = session.get('username')
     if not username:
         return redirect(url_for('index'))
 
-    incident_id = session.get('incident_id') or '1'  # or however you define it
-    session['incident_id'] = incident_id
+
+    incident_id = session.get('incident_id')
+    if not incident_id:
+        return abort(400, description="Missing incident ID in session.")
 
     incident_steps = load_incident_steps()
     if len(incident_steps) == 1 and isinstance(incident_steps[0], list):
@@ -277,22 +290,26 @@ def save_completion():
     incident_type = session.get('type', 'N/A')
 
     try:
-        new_incident = Incident(
-            name=f"{incident_class} - {incident_type}",
-            creation_date=datetime.now(),
-            status="Completed",
-            improvements=improvements,
-            observations=observations,
-            start_datetime=start_time,
-            end_datetime=end_time
-        )
-        db.session.add(new_incident)
+        incident_id = session.get('incident_id')
+        incident = Incident.query.get(incident_id)
+
+        if not incident:
+            return jsonify({'error': 'Incident not found'}), 404
+
+        incident.status = "Completed"
+        incident.improvements = improvements
+        incident.observations = observations
+        incident.start_datetime = start_time
+        incident.end_datetime = end_time
+        incident.name = f"{incident_class} - {incident_type}"  # In case it was "Untitled"
+
         db.session.commit()
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Database error: ' + str(e)}), 500
 
-    session['id'] = new_incident.id
+    session['id'] = incident.id
     session['incident_submitted'] = True
 
     session['report_data'] = {
@@ -427,7 +444,8 @@ def download_report():
 
     if isinstance(end_dt, str):
         try:
-            end_dt = datetime.strptime(end_dt, '%d-%m-%Y %H:%M:%S')
+            end_dt = datetime.fromisoformat(end_dt)
+
         except ValueError:
             end_dt = datetime.now()
 
