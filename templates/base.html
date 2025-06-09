@@ -20,7 +20,7 @@
     </span>
 
   <!-- Barra de Pesquisa -->
-<form id="searchForm" class="d-flex mx-3 mb-3" role="search">
+<form id="searchForm" class="d-flex mb-3" role="search">
   <input id="searchInput" class="form-control me-2" type="search" name="query" placeholder="Search..." aria-label="Search">
   <button class="btn btn-outline-success" type="submit">Search</button>
 </form>
@@ -48,7 +48,7 @@
 
 
   <!-- Onde os resultados vão aparecer -->
-<div id="resultsContainer" class="mt-3"></div>
+<div id="resultsContainer" class="mt-4"></div>
 
 
 
@@ -72,10 +72,13 @@
 
 
 
+
 document.getElementById("searchForm").addEventListener("submit", async function(e) {
   e.preventDefault();
 
   const query = document.getElementById("searchInput").value.trim();
+  if (!query) return;
+
   const response = await fetch("/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -87,41 +90,54 @@ document.getElementById("searchForm").addEventListener("submit", async function(
   container.innerHTML = "";
 
   if (!data.results.length) {
-    container.innerHTML = "<p>Nenhum resultado encontrado.</p>";
+    container.innerHTML = "<p>No results found.</p>";
     return;
+  }
+
+  // Function to highlight keyword
+  function highlight(text, keyword) {
+    const regex = new RegExp(`(${keyword})`, 'gi');
+    return text.replace(regex, "<mark>$1</mark>");
   }
 
   data.results.forEach(item => {
     const card = document.createElement("div");
     card.className = "card mb-2";
+    const cardBody = document.createElement("div");
+    cardBody.className = "card-body";
 
     let title = "";
     let subtitle = "";
+    let content = "";
 
-    if (item.type === "class") {
-      title = "Class";
-      subtitle = "";
-    } else if (item.type === "type") {
-      title = "Type";
-      subtitle = `Class: ${item.class}`;
-    } else if (item.type === "step") {
-      title = "Step";
-      subtitle = `Class: ${item.class} | Type: ${item.type_name}`;
-    } else if (item.type === "sub_step") {
+    if (item.substep) {
       title = "Sub-step";
-      subtitle = `Class: ${item.class} | Type: ${item.type_name}`;
+      subtitle = `${item.class} > ${item.type}`;
+      content = highlight(item.substep, query);
+    } else if (item.step) {
+      title = "Step";
+      subtitle = `${item.class} > ${item.type}`;
+      content = highlight(item.step, query);
+    } else if (item.type) {
+      title = "Type";
+      subtitle = item.class;
+      content = highlight(item.type, query);
+    } else if (item.class) {
+      title = "Class";
+      content = highlight(item.class, query);
     }
 
-    card.innerHTML = `
-      <div class="card-body">
-        <h5 class="card-title">${title}</h5>
-        <h6 class="card-subtitle mb-2 text-muted">${subtitle}</h6>
-        <p class="card-text">${item.content}</p>
-      </div>
+    cardBody.innerHTML = `
+      <h5 class="card-title">${title}</h5>
+      ${subtitle ? `<h6 class="card-subtitle mb-2 text-muted">${subtitle}</h6>` : ""}
+      <p class="card-text">${content}</p>
     `;
+
+    card.appendChild(cardBody);
     container.appendChild(card);
   });
 });
+
 
 
 </script>

@@ -28,9 +28,23 @@
     {% for incident in incidents %}
     <tr>
       <td>
-        <button class="btn btn-sm btn-outline-danger btn-delete" data-id="{{ incident.id }}" title="Delete incident {{ incident.id }}" aria-label="Delete incident {{ incident.id }}">
+        <button class="btn btn-sm btn-outline-danger btn-delete btn-delete-focus" data-id="{{ incident.id }}" title="Delete incident {{ incident.id }}" aria-label="Delete incident {{ incident.id }}">
           🗑️
         </button>
+        ||
+  <button class="btn btn-sm btn-outline-success btn-download btn-download-focus"
+          data-id="{{ incident.id }}"
+          title="Download report for incident {{ incident.id }}"
+          aria-label="Download report for incident {{ incident.id }}"><span class="fs-5">
+          📄
+    </span>
+  </button>
+</td>
+
+
+
+
+
       </td>
       <td>{{ incident.id }}</td>
       <td>{{ incident.name }}</td>
@@ -117,5 +131,65 @@
     }
     return cookieValue;
   }
+
+
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const downloadButtons = document.querySelectorAll('.btn-download');
+
+    downloadButtons.forEach(button => {
+      button.addEventListener('click', function () {
+        const incidentId = this.getAttribute('data-id');
+
+        // Create a hidden link element
+        const link = document.createElement('a');
+        link.href = `/incident/${incidentId}/download`;
+        link.download = '';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+    });
+  });
+
+
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const downloadButtons = document.querySelectorAll('.btn-download');
+
+    downloadButtons.forEach(button => {
+      button.addEventListener('click', async function () {
+        const incidentId = this.getAttribute('data-id');
+        const buttonEl = this;
+
+        try {
+          // Check if the file exists before trying to download
+          const headResponse = await fetch(`/incident/${incidentId}/download`, {
+            method: 'HEAD'
+          });
+
+          if (!headResponse.ok) {
+            alert("⚠️ Report file not found for incident " + incidentId);
+            buttonEl.disabled = true;
+            buttonEl.classList.add('btn-secondary');
+            buttonEl.classList.remove('btn-outline-primary');
+            return;
+          }
+
+          // Trigger download
+          const link = document.createElement('a');
+          link.href = `/incident/${incidentId}/download`;
+          link.download = '';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } catch (err) {
+          console.error("Download failed", err);
+          alert("⚠️ An error occurred while attempting to download the report.");
+        }
+      });
+    });
+  });
+
 </script>
 {% endblock %}

@@ -57,6 +57,19 @@ with app.app_context():
     db.create_all()
 
 
+@app.route('/incident/<int:incident_id>/second_download')
+def second_download_report(incident_id):
+    pdf_path = os.path.join('reports', f'incident_{incident_id}.pdf')
+
+    if os.path.exists(pdf_path):
+        return send_file(pdf_path, as_attachment=True)
+    else:
+        abort(404, description="Report not found.")
+
+
+
+
+
 @app.route('/delete_incident/<int:id>', methods=['POST'])
 def delete_incident(id):
     username = session.get('username')
@@ -505,7 +518,6 @@ def download_report():
     incident_type = data.get('type', 'incident').replace(' ', '_').lower()
     filename = f"report_{current_date}_{incident_type}.pdf"
 
-    pdf.output("/Users/dulcerocha/PycharmProjects/incidentresponse_plan/teste.pdf")
 
     return send_file(pdf_buffer, download_name=filename, as_attachment=True)
 
@@ -527,26 +539,47 @@ def search():
     query = data.get('query', '').lower()
 
     incidents = load_incidents()
-    steps = load_incident_steps()
+    steps_data = load_incident_steps()
 
-    results_1 = []
+    results = []
+
     for incident in incidents:
-        flattened = flatten_data(incident).lower()
-        if query in flattened:
-            results_1.append(incident)
+        class_name = incident.get('class', '')
+        if query in class_name.lower():
+            results.append({
+                "class": class_name
+            })
 
-    results_2 = []
-    for step in steps:
-        flattened = flatten_data(step).lower()
-        if query in flattened:
-            results_2.append(step)
-
-    final_results = results_1 + results_2
-
-    return jsonify({'results': final_results})
+        for type_obj in incident.get('types', []):
+            type_name = type_obj.get('type', '')
+            if query in type_name.lower():
+                results.append({
+                    "class": class_name,
+                    "type": type_name
+                })
 
 
+    for entry in steps_data:
+        class_name = entry.get('class', '')
+        for type_obj in entry.get('types', []):
+            type_name = type_obj.get('type', '')
+            for step in type_obj.get('steps', []):
+                step_text = step.get('step', '')
+                if query in step_text.lower():
+                    results.append({
+                        "class": class_name,
+                        "type": type_name,
+                        "step": step_text
+                    })
+                for sub in step.get('sub_steps', []):
+                    if query in sub.lower():
+                        results.append({
+                            "class": class_name,
+                            "type": type_name,
+                            "substep": sub
+                        })
 
+    return jsonify({'results': results})
 
 
 @app.before_request
