@@ -331,7 +331,8 @@ def upload_file():
 
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        upload_folder = os.path.join('uploads', step_index)
+        incident_id = session.get('incident_id', '1')
+        upload_folder = os.path.join('uploads', incident_id, step_index)
         os.makedirs(upload_folder, exist_ok=True)
         file_path = os.path.join(upload_folder, filename)
         file.save(file_path)
@@ -503,6 +504,8 @@ def download_report():
     current_date = datetime.now().strftime('%d-%m-%Y')
     incident_type = data.get('type', 'incident').replace(' ', '_').lower()
     filename = f"report_{current_date}_{incident_type}.pdf"
+
+    pdf.output("/Users/dulcerocha/PycharmProjects/incidentresponse_plan/teste.pdf")
 
     return send_file(pdf_buffer, download_name=filename, as_attachment=True)
 
