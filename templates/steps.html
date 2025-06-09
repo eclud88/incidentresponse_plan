@@ -48,19 +48,19 @@
 
           {% if step.sub_steps %}
           <div class="mb-4 ms-3">
-            <p class="fw-semibold text-muted">Sub-Steps Checklist:</p>
-            {% for sub in step.sub_steps %}
-            <div class="form-check mb-2">
-              <input class="form-check-input substep-checkbox"
-                type="checkbox"
-                id="substep-{{ step_index }}-{{ loop.index0 }}"
-                value="{{ sub }}"
-                data-step-index="{{ step_index }}">
-              <label class="form-check-label" for="substep-{{ step_index }}-{{ loop.index0 }}">
-                {{ sub }}
+            <p class="fw-semibold text-muted mb-2">Sub-Steps Checklist:</p>
+            <div class="list-group">
+              {% for sub in step.sub_steps %}
+              <label class="list-group-item d-flex align-items-center gap-2 border rounded shadow-sm px-3 py-2 mb-2 hover-effect custom-checkbox-label">
+                <input class="form-check-input mt-0 substep-checkbox"
+                       type="checkbox"
+                       id="substep-{{ step_index }}-{{ loop.index0 }}"
+                       value="{{ sub }}"
+                       data-step-index="{{ step_index }}">
+                <span class="substep-text fw-medium">{{ sub }}</span>
               </label>
+              {% endfor %}
             </div>
-            {% endfor %}
           </div>
           {% endif %}
 
@@ -151,7 +151,9 @@
   }
 
   function finishPlan() {
-    const index = {{ steps|length - 1 }};
+    const totalSteps = document.querySelectorAll('.tab-pane').length;
+    const index = totalSteps - 1;
+
     if (!validateStepInputs(index)) {
       alert('Please provide evidence or check at least one substep before finishing.');
       document.getElementById(`evidence-${index}`).focus();
@@ -198,22 +200,21 @@
     })
     .then(response => response.json())
     .then(data => {
-  const statusElem = document.getElementById(`file-status-${index}`);
-  if (data.status === 'success') {
-    statusElem.textContent = "✅ File uploaded successfully";
-  } else {
-    statusElem.textContent = `❌ Upload failed: ${data.message}`;
-  }
-})
-
-
+      const statusElem = document.getElementById(`file-status-${index}`);
+      if (data.status === 'success') {
+        statusElem.textContent = "✅ File uploaded successfully";
+      } else {
+        statusElem.textContent = "❌ Upload failed";
+      }
+    })
     .catch(error => {
       console.error('Error uploading file:', error);
     });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    const totalSteps = {{ steps|length }};
+    const totalSteps = document.querySelectorAll('.tab-pane').length;
+
     for (let i = 0; i < totalSteps; i++) {
       const textarea = document.getElementById(`evidence-${i}`);
       const checkboxes = document.querySelectorAll(`#step-${i} .substep-checkbox`);
@@ -245,8 +246,16 @@
       checkInput();
     }
 
-    const tabButtons = document.querySelectorAll('button[data-bs-toggle="tab"]');
-    tabButtons.forEach(button => {
+    document.querySelectorAll('.substep-checkbox').forEach(cb => {
+      cb.addEventListener('change', function () {
+        const label = cb.closest('.custom-checkbox-label');
+        if (label) {
+          label.classList.toggle('checked', cb.checked);
+        }
+      });
+    });
+
+    document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(button => {
       button.addEventListener('shown.bs.tab', function (e) {
         const targetId = e.target.getAttribute('data-bs-target');
         const index = parseInt(targetId.split('-')[1]);
@@ -259,5 +268,3 @@
   });
 </script>
 {% endblock %}
-
-

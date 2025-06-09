@@ -5,177 +5,125 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Incident Response Plan{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-  <style>
-    :root {
-      --purple-main: #7e57c2;
-      --purple-hover: #673ab7;
-      --purple-gradient-start: #8a00c2;
-      --purple-gradient-end: #6b00a8;
-      --green-active: #198754;
-    }
-
-    body {
-      background: linear-gradient(to bottom right, #d0c5ec, #e9e0f7);
-      font-family: 'Segoe UI', sans-serif;
-      color: #2e2e2e;
-      padding-top: 70px;
-    }
-
-    .card-custom {
-      background-color: white;
-      border-radius: 20px;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-      padding: 2rem;
-    }
-
-    .btn-purple {
-      background-color: var(--purple-main);
-      color: white;
-      border-radius: 15px;
-    }
-
-    .btn-purple:hover {
-      background-color: var(--purple-hover);
-    }
-
-    .btn-success, .btn-secondary {
-      border-radius: 15px;
-      font-weight: 500;
-    }
-
-    .user-menu {
-      position: relative;
-      top: 20px;
-      right: 30px;
-      z-index: 1000;
-      font-family: 'Inter', sans-serif;
-    }
-
-    .user-toggle {
-      background: linear-gradient(135deg, var(--purple-gradient-start), var(--purple-gradient-end));
-      color: white;
-      padding: 10px 18px;
-      border: none;
-      border-radius: 35px;
-      font-size: 14px;
-      font-weight: 500;
-      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.25);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .user-toggle:hover {
-      background: linear-gradient(135deg, #6b00a8, #4c0073);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
-    }
-
-    .user-dropdown-content {
-      position: absolute;
-      top: calc(100% + 10px);
-      right: 0;
-      background-color: white;
-      min-width: 130px;
-      box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-      border-radius: 8px;
-      overflow: hidden;
-      z-index: 1060;
-      display: none;
-    }
-
-    .user-dropdown-content a {
-      color: black;
-      padding: 12px 16px;
-      text-decoration: none;
-      display: block;
-      font-size: 14px;
-    }
-
-    .user-dropdown-content a:hover {
-      background-color: #f5f5f5;
-    }
-
-    .show {
-      display: block;
-    }
-
-    .page-header {
-      position: fixed;
-      top: 0;
-      right: 0;
-      left: 0;
-      height: 60px;
-      background-color: white;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      padding: 0 30px;
-      z-index: 1050;
-    }
-
-    .nav-tabs .nav-link {
-      color: var(--purple-gradient-end);
-      font-weight: 500;
-      border: none;
-      border-radius: 10px;
-      padding: 10px 16px;
-    }
-
-    .nav-tabs .nav-link.active {
-      background-color: var(--green-active);
-      color: white !important;
-    }
-
-    .nav-tabs .nav-link:hover {
-      color: var(--green-active);
-    }
-
-    input[type="file"] {
-      border-radius: 10px;
-      padding: 8px;
-    }
-  </style>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
-  <header class="page-header" role="banner">
-    {% if show_user_dropdown %}
-    <div class="user-menu">
-      <button class="user-toggle" onclick="toggleDropdown()" aria-haspopup="true" aria-expanded="false">
-        <span class="user-name">{{ session['username'] }}</span>
-        <span class="chevron">▾</span>
+<body class="pt-0 {% if show_user_dropdown %}with-header{% endif %}">
+
+{% if show_user_dropdown %}
+<nav class="navbar navbar-expand-lg bg-body-tertiary py-2">
+  <div class="d-flex w-100 align-items-center justify-content-between px-0">
+
+    <!-- Lado Esquerdo: Mensagem de boas-vindas -->
+    <span class="navbar-text text-muted ps-3">
+      Welcome, {{ session['username'] }}. Here you can manage and review incident response plans.
+    </span>
+
+  <!-- Barra de Pesquisa -->
+<form id="searchForm" class="d-flex mx-3 mb-3" role="search">
+  <input id="searchInput" class="form-control me-2" type="search" name="query" placeholder="Search..." aria-label="Search">
+  <button class="btn btn-outline-success" type="submit">Search</button>
+</form>
+
+
+    <!-- Lado Direito: Menu do utilizador -->
+    <div class="dropdown me-3">
+      <button class="btn btn-outline-secondary dropdown-toggle"
+              type="button"
+              id="userDropdown"
+              data-bs-toggle="dropdown"
+              aria-expanded="false">
+        {{ session['username'] }}
       </button>
-      <div id="dropdown-content" class="user-dropdown-content" role="menu" aria-label="User menu">
-        <a href="{{ url_for('logout') }}" role="menuitem">🚪 Logout</a>
-      </div>
+      <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+        <li><a class="dropdown-item" href="{{ url_for('logout') }}">🚪 Logout</a></li>
+      </ul>
     </div>
-    {% endif %}
-  </header>
 
-  <main class="container mt-4 mb-5" role="main">
-    {% block content %}{% endblock %}
-  </main>
+  </div>
+</nav>
+{% endif %}
 
-  <script>
-    function toggleDropdown() {
-      const dropdown = document.getElementById("dropdown-content");
-      const isShown = dropdown.classList.toggle("show");
-      const btn = document.querySelector('.user-toggle');
-      btn.setAttribute('aria-expanded', isShown);
+<main class="container mt-4 mb-5" role="main">
+
+
+  <!-- Onde os resultados vão aparecer -->
+<div id="resultsContainer" class="mt-3"></div>
+
+
+
+  {% block content %}{% endblock %}
+</main>
+
+<script>
+  function toggleDropdown() {
+    const dropdown = document.getElementById("dropdown-content");
+    const isShown = dropdown.classList.toggle("show");
+    const btn = document.querySelector('.user-toggle');
+    btn.setAttribute('aria-expanded', isShown);
+  }
+
+  window.addEventListener('click', function(event) {
+    if (!event.target.closest('.user-menu')) {
+      const dropdowns = document.querySelectorAll(".user-dropdown-content");
+      dropdowns.forEach(d => d.classList.remove("show"));
+    }
+  });
+
+
+
+document.getElementById("searchForm").addEventListener("submit", async function(e) {
+  e.preventDefault();
+
+  const query = document.getElementById("searchInput").value.trim();
+  const response = await fetch("/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query })
+  });
+
+  const data = await response.json();
+  const container = document.getElementById("resultsContainer");
+  container.innerHTML = "";
+
+  if (!data.results.length) {
+    container.innerHTML = "<p>Nenhum resultado encontrado.</p>";
+    return;
+  }
+
+  data.results.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "card mb-2";
+
+    let title = "";
+    let subtitle = "";
+
+    if (item.type === "class") {
+      title = "Class";
+      subtitle = "";
+    } else if (item.type === "type") {
+      title = "Type";
+      subtitle = `Class: ${item.class}`;
+    } else if (item.type === "step") {
+      title = "Step";
+      subtitle = `Class: ${item.class} | Type: ${item.type_name}`;
+    } else if (item.type === "sub_step") {
+      title = "Sub-step";
+      subtitle = `Class: ${item.class} | Type: ${item.type_name}`;
     }
 
-    window.addEventListener('click', function(event) {
-      if (!event.target.closest('.user-menu')) {
-        const dropdowns = document.querySelectorAll(".user-dropdown-content");
-        dropdowns.forEach(d => d.classList.remove("show"));
-      }
-    });
-  </script>
+    card.innerHTML = `
+      <div class="card-body">
+        <h5 class="card-title">${title}</h5>
+        <h6 class="card-subtitle mb-2 text-muted">${subtitle}</h6>
+        <p class="card-text">${item.content}</p>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+});
+
+
+</script>
 </body>
 </html>
-
