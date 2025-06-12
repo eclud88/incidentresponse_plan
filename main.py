@@ -3,9 +3,13 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 from fpdf import FPDF
+from docxtpl import DocxTemplate
+import tempfile
+import platform
 import os
 import io
 import json
+import subprocess
 
 
 app = Flask(__name__)
@@ -57,6 +61,17 @@ with app.app_context():
     db.create_all()
 
 
+
+@app.route('/incident/<int:incident_id>/second_download')
+def second_download_report(incident_id):
+    pdf_path = os.path.join('reports', f'incident_{incident_id}.pdf')
+
+    if os.path.exists(pdf_path):
+        return send_file(pdf_path, as_attachment=True)
+    else:
+        abort(404, description="Report not found.")
+
+
 @app.route('/delete_incident/<int:id>', methods=['POST'])
 def delete_incident(id):
     username = session.get('username')
@@ -78,7 +93,7 @@ def delete_incident(id):
 @app.route('/')
 def index():
     current_date = datetime.now().strftime('%d/%m/%Y')
-    version = "1.0.0"
+    version = "1.0"
     return render_template('index.html', current_date=current_date, version=version, show_user_dropdown=False)
 
 
@@ -90,7 +105,8 @@ def login():
     if username in USERS and USERS[username] == password:
         session['username'] = username
         return redirect(url_for('dashboard'))
-    return redirect(url_for('index'))
+    message = 'Incorrect user or password!'
+    return render_template('index.html', message=message)
 
 
 @app.route('/logout')
@@ -121,23 +137,13 @@ def incident():
 
     if request.method == 'POST':
         selected_class = request.form.get('class')
+        print('SELECTED CLASS: ', selected_class)
         selected_type = request.form.get('type')
 
         if selected_class and selected_type:
             session['class_'] = selected_class
             session['type_'] = selected_type
             session['start'] = datetime.now()
-
-            # ✅ Create the draft incident here
-            new_incident = Incident(
-                name=f"{selected_class} - {selected_type}",
-                status="Draft",
-                creation_date=datetime.now()
-            )
-            db.session.add(new_incident)
-            db.session.commit()
-
-            session['incident_id'] = new_incident.id  # Store actual ID for uploads & tracking
 
             return redirect(url_for('steps', class_=selected_class, type_=selected_type))
 
@@ -148,17 +154,11 @@ def incident():
     )
 
 
-
 @app.route('/incident/steps', methods=['GET', 'POST'])
 def steps():
     username = session.get('username')
     if not username:
         return redirect(url_for('index'))
-
-
-    incident_id = session.get('incident_id')
-    if not incident_id:
-        return abort(400, description="Missing incident ID in session.")
 
     incident_steps = load_incident_steps()
     if len(incident_steps) == 1 and isinstance(incident_steps[0], list):
@@ -208,7 +208,7 @@ def steps():
     session['start'] = session.get('start') or datetime.now().isoformat()
     session.modified = True
 
-    return render_template('steps.html', incident_id=incident_id, checked_substeps=checked_substeps, steps=found_steps, class_=class_param, type_=type_param, show_user_dropdown=True)
+    return render_template('steps.html', checked_substeps=checked_substeps, steps=found_steps, class_=class_param, type_=type_param, show_user_dropdown=True)
 
 
 @app.route('/incident/save_step', methods=['POST'])
@@ -242,10 +242,6 @@ def save_step():
     sub_steps[step_index] = checked_substeps
 
     session.modified = True
-
-    print(f"Saved step {step_index}:")
-    print(f"- Evidence: {evidence}")
-    print(f"- Sub-steps: {checked_substeps}")
 
     return jsonify({'status': 'ok'})
 
@@ -290,26 +286,22 @@ def save_completion():
     incident_type = session.get('type', 'N/A')
 
     try:
-        incident_id = session.get('incident_id')
-        incident = Incident.query.get(incident_id)
-
-        if not incident:
-            return jsonify({'error': 'Incident not found'}), 404
-
-        incident.status = "Completed"
-        incident.improvements = improvements
-        incident.observations = observations
-        incident.start_datetime = start_time
-        incident.end_datetime = end_time
-        incident.name = f"{incident_class} - {incident_type}"  # In case it was "Untitled"
-
+        new_incident = Incident(
+            name=f"{incident_class} - {incident_type}",
+            creation_date=datetime.now(),
+            status="Completed",
+            improvements=improvements,
+            observations=observations,
+            start_datetime=start_time,
+            end_datetime=end_time
+        )
+        db.session.add(new_incident)
         db.session.commit()
-
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Database error: ' + str(e)}), 500
 
-    session['id'] = incident.id
+    session['id'] = new_incident.id
     session['incident_submitted'] = True
 
     session['report_data'] = {
@@ -339,212 +331,172 @@ def complete():
     return render_template('complete.html', show_user_dropdown=True, incident_id=incident_id)
 
 
-ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'bmp'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/incident/upload_file', methods=['POST'])
 def upload_file():
-    step_index = request.form.get('step')
-    incident_id = session.get('incident_id', '1')
-    file = request.files.get('file')
+    step_index = str(int(request.form['step']) + 1)
+    file = request.files['file']
+    ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'bmp'}
 
-    if not step_index or not incident_id or not file:
-        return jsonify({
-            'status': 'fail',
-            'message': f'Missing data. step={step_index}, incident_id={incident_id}, file_present={bool(file)}'
-        })
+    def allowed_file(filename):
+        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-    if not allowed_file(file.filename):
-        return jsonify({
-            'status': 'fail',
-            'message': f'File type not allowed: {file.filename}'
-        })
-
-    try:
+    if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        upload_folder = os.path.join(app.root_path, 'uploads', step_index, str(incident_id))
+        incident_id = session.get('incident_id', '1')
+        upload_folder = os.path.join('uploads', incident_id, step_index)
         os.makedirs(upload_folder, exist_ok=True)
-
         file_path = os.path.join(upload_folder, filename)
         file.save(file_path)
-        rel_path = os.path.relpath(file_path, app.root_path)
 
-        report_data = session.get('report_data', {})
-        attachments = report_data.setdefault('attachments', {})
-        incident_attachments = attachments.setdefault(str(incident_id), {})
-        step_files = incident_attachments.setdefault(str(step_index), [])
+        # Store file path in session
+        if 'report_data' not in session:
+            session['report_data'] = {}
+        if 'attachments' not in session['report_data']:
+            session['report_data']['attachments'] = {}
+        step_index_str = str(step_index)
+        if step_index_str not in session['report_data']['attachments']:
+            session['report_data']['attachments'][step_index_str] = []
+        session['report_data']['attachments'][step_index_str].append(file_path)
 
-        if rel_path not in step_files:
-            step_files.append(rel_path)
-
-        session['report_data'] = report_data
         session.modified = True
 
-        return jsonify({'status': 'success', 'filepath': rel_path})
-    except Exception as e:
-        return jsonify({'status': 'fail', 'message': f'Error: {str(e)}'})
+        return jsonify({'status': 'success'})
+    return jsonify({'status': 'fail'})
 
 
 
 
-class PDF(FPDF):
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Oktah', 'I', 8)
-        self.cell(0, 10, 'This report was automatically generated by this application', align='L')
-        self.set_y(-15)
-        self.set_x(-40)
-        self.cell(0, 10, f'Page {self.page_no()} of {{nb}}', align='R')
 
 
 @app.route('/download_report')
 def download_report():
-    font_path = "static/fonts/Fontspring-DEMO-oktah_regular-BF651105f8625b4.ttf"
-
     username = session.get('username')
     if not username:
         return redirect(url_for('index'))
+
+    def format_steps(steps):
+        return '\n'.join(f"{i + 1}. {step['step']}" for i, step in enumerate(steps))
+
+    def format_dict(d):
+        if isinstance(d, dict):
+            return '\n'.join(f"{k}: {v}" for k, v in d.items())
+        return str(d)
 
     data = session.get('report_data')
     if not data:
         return redirect(url_for('dashboard'))
 
-    pdf = PDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-
-    # Register font
-    pdf.add_font("Oktah", "", font_path)
-    pdf.add_font("Oktah", "B", font_path)
-    pdf.add_font("Oktah", "I", font_path)
-    pdf.add_font("Oktah", "BI", font_path)
-
-    pdf.add_page()
-    pdf.set_font("Oktah", 'B', 18)
-    pdf.cell(0, 10, "Incident Report", ln=True, align="C")
-    pdf.ln(10)
-
-    # Incident Class and Type
-    pdf.set_font("Oktah", '', 12)
-    incident_class = data.get('class', 'N/A')
-    incident_type = data.get('type', 'N/A')
-    pdf.multi_cell(0, 10, f"Incident Class: {incident_class}\nIncident Type: {incident_type}")
-    pdf.ln(3)
-
-    # Dates
+    lessons = session.get('lessons', {})
     start_dt = session.get('start')
     end_dt = session.get('end')
 
-    if isinstance(start_dt, str):
-        try:
-            start_dt = datetime.fromisoformat(start_dt)
-        except ValueError:
-            start_dt = datetime.now()
+    def parse_dt(dt):
+        if isinstance(dt, str):
+            try:
+                return datetime.fromisoformat(dt)
+            except Exception:
+                return datetime.now()
+        return dt if isinstance(dt, datetime) else datetime.now()
 
-    if isinstance(end_dt, str):
-        try:
-            end_dt = datetime.fromisoformat(end_dt)
+    start_dt = parse_dt(start_dt)
+    end_dt = parse_dt(end_dt)
 
-        except ValueError:
-            end_dt = datetime.now()
+    dados_template = {
+        'incident_id': session.get('id', 'N/A'),
+        'selected_class': data.get('class', 'N/A'),
+        'selected_type': data.get('type', 'N/A'),
+        'start_time': start_dt.strftime('%d/%m/%Y %H:%M:%S'),
+        'end_time': end_dt.strftime('%d/%m/%Y %H:%M:%S'),
+        'steps': data.get('steps', []),
+        'substeps': format_dict(data.get('sub_steps', {})),
+        'evidences': format_dict(data.get('evidences', {})),
+        'attachments': format_dict(data.get('attachments', [])),
+        'improvements': lessons.get('improvements', ''),
+        'observations': lessons.get('observations', '')
+    }
 
-    pdf.cell(0, 10, f"Start: {start_dt.strftime('%d/%m/%Y %H:%M:%S')}", ln=True)
-    pdf.cell(0, 10, f"End: {end_dt.strftime('%d/%m/%Y %H:%M:%S')}", ln=True)
-    pdf.ln(10)
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    template_path = os.path.join(basedir, 'word_templates', 'incidentreport_template.docx')
 
-    # Steps Section
-    pdf.set_font("Oktah", 'B', 14)
-    pdf.set_fill_color(200, 220, 255)
-    pdf.cell(0, 10, "Executed Steps", ln=True, fill=True)
-    pdf.ln(5)
-
-    steps = data.get('steps', [])
-    evidences = data.get('evidences', {})
-    substeps = data.get('sub_steps', {})
-    attachments = data.get('attachments', {})
-
-    for idx, step in enumerate(steps):
-        step_text = step.get('step') if isinstance(step, dict) else str(step)
-        substep_list = step.get('sub_steps', []) if isinstance(step, dict) else []
-
-        # Step header
-        pdf.set_font("Oktah", 'B', 12)
-        pdf.set_fill_color(240, 248, 255)
-        pdf.multi_cell(0, 8, f"Step {idx + 1}: {step_text}", fill=True)
-        pdf.ln(5)
-
-        # Substeps
-        checked = substeps.get(str(idx), [])
-        if substep_list:
-            pdf.set_font("Oktah", '', 11)
-            for sub in substep_list:
-                symbol = "o" if sub in checked else "X"
-                color = (0, 128, 0) if sub in checked else (180, 0, 0)
-                pdf.set_text_color(*color)
-                pdf.multi_cell(0, 6, f"{symbol} {sub}")
-                pdf.ln(1)
-            pdf.set_text_color(0, 0, 0)
-
-        pdf.ln(5)
-
-        # Evidence text
-        evidence_text = evidences.get(str(idx), '')
-        if evidence_text:
-            pdf.set_font("Oktah", '', 11)
-            pdf.set_text_color(0, 0, 80)
-            pdf.multi_cell(0, 6, f"📝 Evidence:\n{evidence_text}")
-            pdf.set_text_color(0, 0, 0)
-            pdf.ln(5)
-
-        # Image attachments
-        # attached_files = attachments.get('uploads', {}).get(str(idx), [])
-        uploads_root = 'uploads'
-        incident_id = session.get('incident_id', '1')
-        folder_path = os.path.join(uploads_root, str(idx), str(incident_id))
-
-        print('folder_path: ', folder_path)
-
-        if os.path.isdir(folder_path):
-            for file in os.listdir(folder_path):
-                print('File:', file)
-                full_path = os.path.join(folder_path, file)
-
-                try:
-                    pdf.image(full_path, w=100)
-                    pdf.ln(5)
-                except Exception as e:
-                    pdf.set_text_color(255, 0, 0)
-                    pdf.cell(0, 10, f"⚠️ Error loading image: {file}", ln=True)
-                    pdf.set_text_color(0, 0, 0)
-
-    # Lessons Learned
-    pdf.set_font("Oktah", 'B', 14)
-    pdf.set_fill_color(200, 220, 255)
-    pdf.cell(0, 10, "Lessons Learned", fill=True)
-    pdf.ln(5)
-    pdf.set_font("Oktah", '', 12)
-
-    lessons = session.get('lessons', {})
-    improvements = lessons.get('improvements', '')
-    observations = lessons.get('observations', '')
-
-    pdf.ln(5)
-    pdf.multi_cell(0, 8, f"Improvements:\n{improvements}")
-    pdf.ln(3)
-    pdf.multi_cell(0, 8, f"Observations:\n{observations}")
-
-    # Export PDF
-    pdf_buffer = io.BytesIO()
-    pdf.output(pdf_buffer)
-    pdf_buffer.seek(0)
+    pdf_path = gerar_docx_com_dados(dados_template, template_path=template_path)
+    filename = f"report_{datetime.now().strftime('%d-%m-%Y')}_{dados_template['selected_type'].replace(' ', '_')}.pdf"
+    return send_file(pdf_path, as_attachment=True, download_name=filename)
 
 
-    current_date = datetime.now().strftime('%Y-%m-%d')
-    incident_type_slug = incident_type.replace(' ', '_').lower()
-    filename = f"report_{current_date}_{incident_type_slug}.pdf"
+def flatten_data(data):
+    """Função recursiva que transforma objetos aninhados em texto para pesquisa."""
+    if isinstance(data, dict):
+        return ' '.join(flatten_data(v) for v in data.values())
+    elif isinstance(data, list):
+        return ' '.join(flatten_data(item) for item in data)
+    else:
+        return str(data)
 
-    return send_file(pdf_buffer, download_name=filename, as_attachment=True)
+@app.route('/search', methods=['POST'])
+def search():
+    data = request.get_json()
+    query = data.get('query', '').lower()
+
+    incidents = load_incidents()
+    steps_data = load_incident_steps()
+
+    results = []
+
+    for incident in incidents:
+        class_name = incident.get('class', '')
+        if query in class_name.lower():
+            results.append({
+                "class": class_name
+            })
+
+        for type_obj in incident.get('types', []):
+            type_name = type_obj.get('type', '')
+            if query in type_name.lower():
+                results.append({
+                    "class": class_name,
+                    "type": type_name
+                })
+
+
+    for entry in steps_data:
+        class_name = entry.get('class', '')
+        for type_obj in entry.get('types', []):
+            type_name = type_obj.get('type', '')
+            for step in type_obj.get('steps', []):
+                step_text = step.get('step', '')
+                if query in step_text.lower():
+                    results.append({
+                        "class": class_name,
+                        "type": type_name,
+                        "step": step_text
+                    })
+                for sub in step.get('sub_steps', []):
+                    if query in sub.lower():
+                        results.append({
+                            "class": class_name,
+                            "type": type_name,
+                            "substep": sub
+                        })
+
+    return jsonify({'results': results})
+
+
+
+def gerar_docx_com_dados(dados, template_path='word_templates/incidentreport_template.docx'):
+    temp_dir = tempfile.mkdtemp()
+    output_docx = os.path.join(temp_dir, 'incident_report.docx')
+
+    # Preencher o template
+    doc = DocxTemplate(template_path)
+    doc.render(dados)
+    doc.save(output_docx)
+
+    # Converter com LibreOffice
+    output_pdf = converter_para_pdf_com_libreoffice(output_docx)
+
+    return output_pdf  # retorna o caminho final do PDF
+
 
 
 
@@ -566,6 +518,25 @@ def page_not_found(e):
 @app.route('/favicon.ico')
 def favicon():
     return '', 204
+
+
+
+def converter_para_pdf_com_libreoffice(docx_path):
+    output_dir = os.path.dirname(docx_path)
+    libreoffice_path = r"C:\Program Files\LibreOffice\program\soffice.exe"
+
+    if not os.path.exists(libreoffice_path):
+        raise FileNotFoundError("LibreOffice não foi encontrado no caminho especificado.")
+
+    try:
+        subprocess.run([
+            libreoffice_path, "--headless", "--convert-to", "pdf", "--outdir", output_dir, docx_path
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Erro ao converter DOCX para PDF com LibreOffice: {e}")
+
+    pdf_path = os.path.splitext(docx_path)[0] + ".pdf"
+    return pdf_path
 
 
 
