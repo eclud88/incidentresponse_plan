@@ -2,9 +2,6 @@
 {% block title %}Incidents{% endblock %}
 
 {% block content %}
-<style>
-  /* Styling omitted for brevity — your CSS is solid */
-</style>
 
 <div class="row justify-content-center">
   <div class="col-md-8">
@@ -14,13 +11,21 @@
       <form action="{{ url_for('incident') }}" method="POST" id="incidentForm" novalidate>
         <!-- Incident Class -->
         <div class="mb-3">
-          <label for="class" class="form-label">Incident Class</label>
-          <select name="class" id="class" class="form-select" required>
+          <label for="incident-class" class="form-label">Incident Class</label>
+          <select name="class_" id="incident-class" class="form-select" required>
             <option value="" disabled {% if not class_ %}selected{% endif %}>Select here a class</option>
-            {% for incident in incidents %}
-              {% set class_name = incident['class'] if incident['class'] else incident.class %}
-              <option value="{{ class_name }}" {% if class_ == class_name %}selected{% endif %}>{{ class_name }}</option>
-            {% endfor %}
+{% set seen_classes = [] %}
+{% for incident in incidents %}
+  {% if incident['class'] not in seen_classes %}
+    <option value="{{ incident['class'] }}" {% if class_ == incident['class'] %}selected{% endif %}>
+      {{ incident['class'] }}
+    </option>
+    {% set _ = seen_classes.append(incident['class']) %}
+  {% endif %}
+{% endfor %}
+
+
+
           </select>
           <div class="form-text">Choose first the incident class.</div>
         </div>
@@ -28,7 +33,7 @@
         <!-- Incident Type -->
         <div class="mb-3">
           <label for="type" class="form-label">Incident Type</label>
-          <select name="type" id="type" class="form-select" required disabled>
+          <select name="type_" id="type" class="form-select" required disabled>
             <option value="">Select a class first</option>
           </select>
           <div class="form-text">Select the type based on the class.</div>
@@ -47,7 +52,7 @@
   const currentClass = "{{ class_ | default('') }}";
   const currentType = "{{ type_ | default('') }}";
 
-  const classSelect = document.getElementById('class');
+  const classSelect = document.getElementById('incident-class');
   const typeSelect = document.getElementById('type');
   const submitBtn = document.getElementById('submitBtn');
 
