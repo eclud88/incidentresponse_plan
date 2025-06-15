@@ -325,7 +325,9 @@ def complete():
     if not username:
         return redirect(url_for('index'))
 
-    incident_id = session.get('id') or session.get('incident_id') or '1'
+    session.modified = True
+
+    incident_id = session.get('id', '1')
 
     print('incident ID:' , incident_id)
 
@@ -353,7 +355,7 @@ def upload_file():
 
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        incident_id = session.get('incident_id', session.get('id', '1'))
+        incident_id = session.get('id') or '1'
         upload_folder = os.path.join('uploads', str(incident_id), str(int(step_index) + 1))
         os.makedirs(upload_folder, exist_ok=True)
 
@@ -406,13 +408,18 @@ def download_report():
     sub_steps = data.get('sub_steps', {})
     evidences = data.get('evidences', {})
 
-    incident_id = data.get('incident_id', session.get('incident_id', '1'))
+    incident_id = session.get('id', '1')
+
+    print('INCIDENT ID EQUALS TO:', incident_id)
+
     upload_base = os.path.join('uploads', str(incident_id))
     attachments = {}
 
     if os.path.exists(upload_base):
         for step_folder in os.listdir(upload_base):
+            print('STEP FOLDER: ', step_folder)
             step_path = os.path.join(upload_base, step_folder)
+            print('STEP_PATH: ', step_path)
             if os.path.isdir(step_path):
                 files = os.listdir(step_path)
                 if files:
@@ -423,9 +430,9 @@ def download_report():
 
     steps_structured = []
     for index, step in enumerate(steps_raw):
-        step_index = str(index)  # ou str(index + 1) se for esse o usado no upload!
+        step_index = str(index + 1)  # ou str(index + 1) se for esse o usado no upload!
         steps_structured.append({
-            'step': step.get('step', f'Step {index + 1}'),
+            'step': step.get('step', f'Step {step_index}'),
             'substeps': sub_steps.get(step_index, []),
             'evidences': evidences.get(step_index, []),
             'attachments': attachments.get(step_index, []),
@@ -436,7 +443,7 @@ def download_report():
 
     dados_template = {
         'current_date': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
-        'incident_id': data.get('incident_id', '1'),
+        'incident_id': session.get('id', '1'),
         'selected_class': data.get('class', 'N/A'),
         'selected_type': data.get('type', 'N/A'),
         'start_time': start_dt.strftime('%d/%m/%Y %H:%M:%S'),
@@ -453,6 +460,7 @@ def download_report():
 
     pdf_path = gerar_docx_com_dados(dados_template, template_path=template_path)
     filename = f"report_{datetime.now().strftime('%d-%m-%Y')}_{dados_template['selected_type'].replace(' ', '_')}.pdf"
+
     return send_file(pdf_path, as_attachment=True, download_name=filename)
 
 
