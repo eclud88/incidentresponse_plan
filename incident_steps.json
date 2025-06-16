@@ -1033,6 +1033,136 @@
             ]
           },
 
+  {
+
+    "class": "Intrusion Attempt",
+    "types": [
+      {
+        "type": "Vulnerability Exploitation",
+        "steps": [
+          {
+            "step": "Detect exploit attempt via monitoring tools",
+            "sub_steps": [
+              "Enable IDS/IPS signatures for known exploit behavior.",
+              "Monitor application/system logs for unusual input or buffer overflow attempts.",
+              "Identify external scans or exploit payloads via network traffic analysis.",
+              "Flag CVE-related activity or known exploit kits (Metasploit, etc.)."
+            ]
+          },
+          {
+            "step": "Isolate exploited assets",
+            "sub_steps": [
+              "Segment the affected asset from the network.",
+              "Stop services or containers potentially affected.",
+              "Initiate EDR isolation if supported.",
+              "Notify SOC or IR team of confirmed exploit activity."
+            ]
+          },
+          {
+            "step": "Validate exploit success and impact",
+            "sub_steps": [
+              "Inspect logs for evidence of shell access or privilege escalation.",
+              "Review process creation, registry modification, or file drops.",
+              "Correlate with alerts from security tools (SIEM, EDR, WAF).",
+              "Use forensic tools to identify persistence mechanisms."
+            ]
+          },
+          {
+            "step": "Patch or mitigate exploited vulnerability",
+            "sub_steps": [
+              "Identify the software component and specific CVE.",
+              "Apply vendor patches or configuration changes.",
+              "If patching isn’t feasible, implement virtual patching (WAF, ACLs).",
+              "Document the mitigation steps and timeline."
+            ]
+          }
+        ]
+      },
+      {
+        "type": "Login Attempt",
+        "steps": [
+          {
+            "step": "Detect brute force or credential stuffing activity",
+            "sub_steps": [
+              "Enable lockout policies after multiple failed login attempts.",
+              "Correlate logon failure trends across systems.",
+              "Flag login attempts from blacklisted IPs.",
+              "Detect use of automation tools (e.g., Hydra, Burp Suite)."
+            ]
+          },
+          {
+            "step": "Identify accounts targeted or compromised",
+            "sub_steps": [
+              "Review logs for successful logins after multiple failures.",
+              "Flag use of default or weak credentials.",
+              "Match login activity against known user behavior.",
+              "Check MFA challenges and bypass attempts."
+            ]
+          },
+          {
+            "step": "Contain access and notify users",
+            "sub_steps": [
+              "Lock potentially compromised accounts.",
+              "Revoke or reset credentials.",
+              "Notify users and admins of suspicious login behavior.",
+              "Require re-authentication with MFA."
+            ]
+          },
+          {
+            "step": "Harden authentication mechanisms",
+            "sub_steps": [
+              "Enforce password complexity policies.",
+              "Enable adaptive authentication based on risk.",
+              "Require MFA for all users.",
+              "Audit and remove inactive or legacy accounts."
+            ]
+          }
+        ]
+      },
+      {
+        "type": "New Attack Signature",
+        "steps": [
+          {
+            "step": "Detect novel indicators through threat intel feeds",
+            "sub_steps": [
+              "Integrate real-time threat intel into SIEM.",
+              "Enable detection of unknown or low-confidence signatures.",
+              "Monitor for anomalies that deviate from baselines.",
+              "Use ML/behavioral analytics to detect previously unseen behaviors."
+            ]
+          },
+          {
+            "step": "Validate signature effectiveness",
+            "sub_steps": [
+              "Simulate attack in test environment.",
+              "Confirm signature triggers properly.",
+              "Adjust sensitivity thresholds to avoid false positives.",
+              "Collaborate with vendors or ISACs to refine detection."
+            ]
+          },
+          {
+            "step": "Deploy detection/prevention logic",
+            "sub_steps": [
+              "Update IDS/IPS, AV, and endpoint rulesets.",
+              "Distribute detection rules via configuration management tools.",
+              "Push updates to cloud security services and proxies.",
+              "Ensure rollback capability in case of false positives."
+            ]
+          },
+          {
+            "step": "Monitor effectiveness and tune as needed",
+            "sub_steps": [
+              "Track detection metrics post-deployment.",
+              "Adjust rules based on evasion attempts.",
+              "Review alert volume and suppress noise.",
+              "Incorporate feedback loops into detection engineering."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+
               {
                 "class": "Information Security",
                 "types": [
@@ -2579,4 +2709,3 @@
             ]
           }
         ]
-

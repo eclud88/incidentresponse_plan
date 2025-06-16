@@ -114,6 +114,7 @@
     }
 
     const textarea = document.getElementById(`evidence-${index}`);
+
     const checkedSubsteps = Array.from(
       document.querySelectorAll(`#step-${index} .substep-checkbox:checked`)
     ).map(cb => cb.value);
@@ -128,7 +129,7 @@
           checked_substeps: checkedSubsteps
         })
       });
-
+      console.log("TEXT AREA", textarea.value.trim());
       const currentTab = document.getElementById(`tab-${index}`);
       currentTab.classList.add('bg-success', 'text-white');
 

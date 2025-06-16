@@ -3,13 +3,15 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 from fpdf import FPDF
-from docxtpl import DocxTemplate
+from docxtpl import DocxTemplate, InlineImage
 import tempfile
 import platform
 import os
 import io
 import json
 import subprocess
+import platform
+from docx.shared import Inches
 
 
 app = Flask(__name__)
@@ -59,7 +61,6 @@ def load_incident_steps():
 
 with app.app_context():
     db.create_all()
-
 
 
 @app.route('/incident/<int:incident_id>/second_download')
@@ -136,16 +137,15 @@ def incident():
     selected_type = ''
 
     if request.method == 'POST':
-        selected_class = request.form.get('class')
-        print('SELECTED CLASS: ', selected_class)
-        selected_type = request.form.get('type')
+        selected_class = request.form.get('class_')
+        selected_type = request.form.get('type_')
 
         if selected_class and selected_type:
             session['class_'] = selected_class
             session['type_'] = selected_type
             session['start'] = datetime.now()
 
-            return redirect(url_for('steps', class_=selected_class, type_=selected_type))
+            return redirect(url_for('steps', class_=selected_class, type_=selected_type, start=start))
 
     return render_template(
         'incident.html',
@@ -233,8 +233,6 @@ def save_step():
         return jsonify({'error': 'Invalid substeps format'}), 400
 
 
-
-    # Store evidence and sub-steps in top-level session keys
     evidences = session.setdefault('evidences', {})
     sub_steps = session.setdefault('sub_steps', {})
 
@@ -297,6 +295,9 @@ def save_completion():
         )
         db.session.add(new_incident)
         db.session.commit()
+
+        session['id'] = new_incident.id
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Database error: ' + str(e)}), 500
@@ -325,17 +326,24 @@ def complete():
     if not username:
         return redirect(url_for('index'))
 
-    incident_id = session.get('incident_id', '1')
-    print('incident ID:' , incident_id)
+    incident_id = session.get('id', '1')
 
-    return render_template('complete.html', show_user_dropdown=True, incident_id=incident_id)
-
+    return render_template('complete.html', incident_id=incident_id, show_user_dropdown=True)
 
 
 @app.route('/incident/upload_file', methods=['POST'])
 def upload_file():
-    step_index = str(int(request.form['step']) + 1)
-    file = request.files['file']
+    step_index = request.form.get('step')
+    file = request.files.get('file')
+
+    if step_index is None or file is None:
+        return jsonify({'status': 'fail', 'reason': 'missing data'}), 400
+
+    try:
+        step_index = str(int(step_index))
+    except ValueError:
+        return jsonify({'status': 'fail', 'reason': 'invalid step index'}), 400
+
     ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'bmp'}
 
     def allowed_file(filename):
@@ -343,30 +351,26 @@ def upload_file():
 
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        incident_id = session.get('incident_id', '1')
-        upload_folder = os.path.join('uploads', incident_id, step_index)
+        incident_id = session.get('id') or '1'
+        upload_folder = os.path.join('uploads', str(incident_id), str(int(step_index) + 1))
         os.makedirs(upload_folder, exist_ok=True)
+
         file_path = os.path.join(upload_folder, filename)
         file.save(file_path)
+        relative_path = os.path.relpath(file_path, start=os.getcwd())
 
-        # Store file path in session
-        if 'report_data' not in session:
-            session['report_data'] = {}
-        if 'attachments' not in session['report_data']:
-            session['report_data']['attachments'] = {}
-        step_index_str = str(step_index)
-        if step_index_str not in session['report_data']['attachments']:
-            session['report_data']['attachments'][step_index_str] = []
-        session['report_data']['attachments'][step_index_str].append(file_path)
+        report_data = session.get('report_data', {})
+        attachments = report_data.get('attachments', {})
 
+        attachments.setdefault(str(int(step_index) + 1), []).append(relative_path)
+        report_data['attachments'] = attachments
+        session['report_data'] = report_data
         session.modified = True
 
+        print('UPLOAD OK - ATTACHMENTS:', attachments)
         return jsonify({'status': 'success'})
-    return jsonify({'status': 'fail'})
 
-
-
-
+    return jsonify({'status': 'fail', 'reason': 'invalid file'}), 400
 
 
 @app.route('/download_report')
@@ -374,14 +378,6 @@ def download_report():
     username = session.get('username')
     if not username:
         return redirect(url_for('index'))
-
-    def format_steps(steps):
-        return '\n'.join(f"{i + 1}. {step['step']}" for i, step in enumerate(steps))
-
-    def format_dict(d):
-        if isinstance(d, dict):
-            return '\n'.join(f"{k}: {v}" for k, v in d.items())
-        return str(d)
 
     data = session.get('report_data')
     if not data:
@@ -402,16 +398,54 @@ def download_report():
     start_dt = parse_dt(start_dt)
     end_dt = parse_dt(end_dt)
 
+    steps_raw = data.get('steps', [])
+    sub_steps = data.get('sub_steps', {})
+    evidences = data.get('evidences', {})
+
+    incident_id = session.get('id', '1')
+
+    print('INCIDENT ID EQUALS TO:', incident_id)
+
+    upload_base = os.path.join('uploads', str(incident_id))
+    attachments = {}
+
+    '''if os.path.exists(upload_base):
+        for step_folder in os.listdir(upload_base):
+            step_path = os.path.join(upload_base, step_folder)
+            if os.path.isdir(step_path):
+                files = os.listdir(step_path)
+                if files:
+                    attachments[step_folder] = [os.path.join('uploads', str(incident_id), step_folder, f) for f in
+                                                files]'''
+
+    if os.path.exists(upload_base):
+        for upload, incident_id in os.listdir(upload_base):
+            step_path = os.path.isdir(upload_base, steps_raw)
+            if os.path.isdir(step_path):
+                files = os.listdir(step_path)
+                if files:
+                    attachments[steps_raw] = [os.path.join('uploads', str(incident_id), steps_raw, f) for f in files]
+
+                    print('ATTACHMENTS 90: ', attachments)
+
+    steps_structured = []
+    for index, step in enumerate(steps_raw):
+        step_index = str(index + 1)
+        steps_structured.append({
+            'step': step.get('step', f'Step {step_index}'),
+            'substeps': sub_steps.get(step_index, []),
+            'evidences': evidences.get(step_index, []),
+            'attachments': attachments.get(step_index, []),
+        })
+
     dados_template = {
-        'incident_id': session.get('id', 'N/A'),
+        'current_date': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+        'incident_id': session.get('id', '1'),
         'selected_class': data.get('class', 'N/A'),
         'selected_type': data.get('type', 'N/A'),
         'start_time': start_dt.strftime('%d/%m/%Y %H:%M:%S'),
         'end_time': end_dt.strftime('%d/%m/%Y %H:%M:%S'),
-        'steps': data.get('steps', []),
-        'substeps': format_dict(data.get('sub_steps', {})),
-        'evidences': format_dict(data.get('evidences', {})),
-        'attachments': format_dict(data.get('attachments', [])),
+        'steps': steps_structured,
         'improvements': lessons.get('improvements', ''),
         'observations': lessons.get('observations', '')
     }
@@ -421,6 +455,9 @@ def download_report():
 
     pdf_path = gerar_docx_com_dados(dados_template, template_path=template_path)
     filename = f"report_{datetime.now().strftime('%d-%m-%Y')}_{dados_template['selected_type'].replace(' ', '_')}.pdf"
+
+    session.modified = True
+
     return send_file(pdf_path, as_attachment=True, download_name=filename)
 
 
@@ -484,20 +521,30 @@ def search():
 
 
 def gerar_docx_com_dados(dados, template_path='word_templates/incidentreport_template.docx'):
+    # Criação de diretório temporário para guardar o ficheiro Word final
     temp_dir = tempfile.mkdtemp()
-    output_docx = os.path.join(temp_dir, 'incident_report.docx')
+    output_docx = os.path.join(temp_dir, 'incidentreport.docx')
 
-    # Preencher o template
+    # Carregar template do Word
     doc = DocxTemplate(template_path)
+
+    # Processar imagens para cada passo
+    for step in dados.get('steps', []):
+        imagens = []
+        for path in step.get('attachments', []):
+            full_path = os.path.join(os.getcwd(), path)
+            if os.path.exists(full_path):
+                imagens.append(InlineImage(doc, full_path, width=Inches(3)))
+        step['attachments'] = imagens
+
+    # Preencher e guardar documento
     doc.render(dados)
     doc.save(output_docx)
 
-    # Converter com LibreOffice
+    # Converter para PDF usando LibreOffice
     output_pdf = converter_para_pdf_com_libreoffice(output_docx)
 
-    return output_pdf  # retorna o caminho final do PDF
-
-
+    return output_pdf
 
 
 @app.before_request
@@ -520,10 +567,14 @@ def favicon():
     return '', 204
 
 
-
 def converter_para_pdf_com_libreoffice(docx_path):
     output_dir = os.path.dirname(docx_path)
-    libreoffice_path = r"C:\Program Files\LibreOffice\program\soffice.exe"
+
+    os_name = platform.system()
+    if os_name == "Windows":
+        libreoffice_path = r"C:\Program Files\LibreOffice\program\soffice.exe"
+    elif os_name == "Darwin":
+        libreoffice_path = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
 
     if not os.path.exists(libreoffice_path):
         raise FileNotFoundError("LibreOffice não foi encontrado no caminho especificado.")
@@ -537,7 +588,6 @@ def converter_para_pdf_com_libreoffice(docx_path):
 
     pdf_path = os.path.splitext(docx_path)[0] + ".pdf"
     return pdf_path
-
 
 
 if __name__ == '__main__':
