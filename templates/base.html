@@ -50,8 +50,6 @@
   <!-- Onde os resultados vão aparecer -->
 <div id="resultsContainer" class="mt-4"></div>
 
-
-
   {% block content %}{% endblock %}
 </main>
 
@@ -69,9 +67,6 @@
       dropdowns.forEach(d => d.classList.remove("show"));
     }
   });
-
-
-
 
 document.getElementById("searchForm").addEventListener("submit", async function(e) {
   e.preventDefault();
@@ -137,8 +132,6 @@ document.getElementById("searchForm").addEventListener("submit", async function(
     container.appendChild(card);
   });
 });
-
-
 
 </script>
 </body>
