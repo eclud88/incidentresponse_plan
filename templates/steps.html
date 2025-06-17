@@ -6,6 +6,8 @@
   <div class="col-lg-10">
     <div class="card-custom p-4">
       <h2 class="mb-2 text-center fw-bold" style="letter-spacing: 0.15em;">Incident Response Plan</h2>
+      {% set evidences = session.evidences[session_inprogress|string] if session.evidences and session_inprogress and session_inprogress|string in session.evidences else {} %}
+      {% set sub_steps_data = session.sub_steps[session_inprogress|string] if session.sub_steps and session_inprogress and session_inprogress|string in session.sub_steps else {} %}
 
       {% if class_ and type_ %}
       <div class="mb-4 text-center">
@@ -56,7 +58,8 @@
                        type="checkbox"
                        id="substep-{{ step_index }}-{{ loop.index0 }}"
                        value="{{ sub }}"
-                       data-step-index="{{ step_index }}">
+                       data-step-index="{{ step_index }}"
+                        {% if session and session.sub_steps and sub in session.sub_steps[step_index|string] %}checked{% endif %}>
                 <span class="substep-text fw-medium">{{ sub }}</span>
               </label>
               {% endfor %}
@@ -67,7 +70,9 @@
           <div class="mb-3">
             <label for="evidence-{{ step_index }}" class="form-label fw-semibold">Evidence(s):</label>
             <textarea id="evidence-{{ step_index }}" class="form-control" rows="4" required aria-required="true"
-              placeholder="Describe logs, actions taken, screenshots, tools used, findings, or communications. This information will be included in the incident report."></textarea>
+  placeholder="Describe logs, actions taken, screenshots, tools used, findings, or communications. This information will be included in the incident report.">
+</textarea>
+
           </div>
 
           <div class="mb-4">
@@ -98,6 +103,26 @@
 </div>
 
 <script>
+  async function startIncidentIfNeeded() {
+  try {
+    const res = await fetch('/incident/start', {
+      method: 'POST',
+      credentials: 'include'
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Erro ao iniciar incidente");
+    }
+
+    const data = await res.json();
+    console.log("📌 incident_id:", data.id);
+  } catch (error) {
+    console.error("❌ Erro ao iniciar incidente:", error);
+    alert("Erro ao iniciar o incidente.");
+  }
+}
+
   function validateStepInputs(index) {
     const textarea = document.getElementById(`evidence-${index}`);
     const checkboxes = document.querySelectorAll(`#step-${index} .substep-checkbox`);
@@ -107,42 +132,51 @@
   }
 
   async function nextStep(index) {
-    if (!validateStepInputs(index)) {
-      alert('Please provide evidence or check at least one substep before continuing.');
-      document.getElementById(`evidence-${index}`).focus();
+  if (!validateStepInputs(index)) {
+    alert('Please provide evidence or check at least one substep before continuing.');
+    document.getElementById(`evidence-${index}`).focus();
+    return;
+  }
+
+  await startIncidentIfNeeded();
+
+  const textarea = document.getElementById(`evidence-${index}`);
+  const checkedSubsteps = Array.from(
+    document.querySelectorAll(`#step-${index} .substep-checkbox:checked`)
+  ).map(cb => cb.value);
+
+  try {
+    const res = await fetch("/incident/save_step", {
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        step: index,
+        evidence: textarea.value.trim(),
+        checked_substeps: checkedSubsteps
+      })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      alert("Erro ao guardar o passo: " + (errData.error || res.status));
+      console.error("Erro detalhe:", errData);
       return;
     }
 
-    const textarea = document.getElementById(`evidence-${index}`);
+    const currentTab = document.getElementById(`tab-${index}`);
+    currentTab.classList.add('bg-success', 'text-white');
 
-    const checkedSubsteps = Array.from(
-      document.querySelectorAll(`#step-${index} .substep-checkbox:checked`)
-    ).map(cb => cb.value);
-
-    try {
-      await fetch("/incident/save_step", {
-        method: "POST",
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          step: index,
-          evidence: textarea.value.trim(),
-          checked_substeps: checkedSubsteps
-        })
-      });
-      console.log("TEXT AREA", textarea.value.trim());
-      const currentTab = document.getElementById(`tab-${index}`);
-      currentTab.classList.add('bg-success', 'text-white');
-
-      const nextTab = document.getElementById(`tab-${index + 1}`);
-      if (nextTab) {
-        nextTab.removeAttribute('disabled');
-        new bootstrap.Tab(nextTab).show();
-      }
-    } catch (err) {
-      alert('Error saving the step. Please try again.');
-      console.error(err);
+    const nextTab = document.getElementById(`tab-${index + 1}`);
+    if (nextTab) {
+      nextTab.removeAttribute('disabled');
+      new bootstrap.Tab(nextTab).show();
     }
+  } catch (err) {
+    alert('Erro ao guardar o passo. Verifica a consola.');
+    console.error(err);
   }
+}
 
   function goBackStep(index) {
     const prevTab = document.getElementById(`tab-${index - 1}`);

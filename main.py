@@ -19,12 +19,13 @@ app.secret_key = os.environ.get('SECRET_KEY', 'fallback-dev-key')
 
 
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
-
-
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = True  # True se usares HTTPS
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 db = SQLAlchemy(app)
 
 
@@ -41,12 +42,25 @@ STEPS_PATH = os.path.join(basedir, 'incident_steps.json')
 class Incident(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100))
+    sub_steps = db.Column(db.Text, nullable=True)
+    evidences = db.Column(db.Text, nullable=True)
     creation_date = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(50), default='In Progress')
     improvements = db.Column(db.Text)
     observations = db.Column(db.Text)
     start_datetime = db.Column(db.DateTime, nullable=True)
     end_datetime = db.Column(db.DateTime, nullable=True)
+
+    def progress_percentage(self):
+        try:
+            sub_steps = json.loads(self.sub_steps) if self.sub_steps else {}
+            total_steps = len(sub_steps)
+            if total_steps == 0:
+                return 0
+            completed_steps = sum(1 for step, done in sub_steps.items() if done)
+            return int((completed_steps / total_steps) * 100)
+        except Exception:
+            return 0
 
 
 def load_incidents():
@@ -123,7 +137,10 @@ def dashboard():
         return redirect(url_for('index'))
 
     incidents = Incident.query.order_by(Incident.creation_date.desc()).all()
-    return render_template('dashboard.html', incidents=incidents, show_user_dropdown=True, username=username)
+
+    in_progress_incidents = Incident.query.filter_by(status='In Progress').order_by(Incident.creation_date.asc()).all()
+
+    return render_template('dashboard.html', in_progress_incidents=in_progress_incidents, incidents=incidents, username=username, show_user_dropdown=True)
 
 
 @app.route('/incident', methods=['GET', 'POST'])
@@ -133,19 +150,34 @@ def incident():
         return redirect(url_for('index'))
 
     incidents = load_incidents()
-    selected_class = ''
-    selected_type = ''
 
     if request.method == 'POST':
         selected_class = request.form.get('class_')
         selected_type = request.form.get('type_')
 
         if selected_class and selected_type:
-            session['class_'] = selected_class
-            session['type_'] = selected_type
+            session['class'] = selected_class
+            session['type'] = selected_type
             session['start'] = datetime.now()
 
-            return redirect(url_for('steps', class_=selected_class, type_=selected_type, start=start))
+            try:
+                new_incident = Incident(
+                    name=f"{selected_class} - {selected_type}",
+                    creation_date=datetime.now(),
+                    status="In Progress"
+                )
+                db.session.add(new_incident)
+                db.session.commit()
+
+                session['id'] = new_incident.id
+                print("✅ INCIDENTE CRIADO COM ID:", new_incident.id)
+
+            except Exception as e:
+                db.session.rollback()
+                print("❌ ERRO ao criar incidente:", str(e))
+                return redirect(url_for('dashboard'))
+
+            return redirect(url_for('steps', class_=selected_class, type_=selected_type))
 
     return render_template(
         'incident.html',
@@ -154,44 +186,69 @@ def incident():
     )
 
 
+@app.route('/resume_incident/<int:incident_id>')
+def resume_incident(incident_id):
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('index'))
+
+    incident = Incident.query.get(incident_id)
+    if not incident or incident.status != 'In Progress':
+        flash("Incident not available to resume.", "warning")
+        return redirect(url_for('dashboard'))
+
+    # Recarregar sessão com dados do incidente
+    session['id'] = incident.id
+    session['start'] = incident.start_datetime.isoformat() if incident.start_datetime else datetime.utcnow().isoformat()
+    session['evidences'] = json.loads(incident.evidences or '{}')
+    session['sub_steps'] = json.loads(incident.sub_steps or '{}')
+    session['class'] = incident.name  # ou outro nome
+    session['steps'] = []  # ou recuperar se guardaste
+    session['type'] = 'Retoma'
+
+    return redirect(url_for('incident'))  # ou outro ponto mais específico
+
+
+
+
+@app.route('/incident/start', methods=['POST'])
+def start_incident():
+    if 'id' not in session:
+        new_incident = Incident(
+            name='Em progresso',
+            creation_date=datetime.now(),
+            status='In Progress'
+        )
+        db.session.add(new_incident)
+        db.session.commit()
+        session['id'] = new_incident.id
+        session.modified = True
+        print("🆕 Novo incidente iniciado com ID:", new_incident.id)
+    return jsonify({'status': 'ok', 'id': session['id']})
+
+
 @app.route('/incident/steps', methods=['GET', 'POST'])
 def steps():
     username = session.get('username')
     if not username:
         return redirect(url_for('index'))
 
+    incident_id = session.get('id')
+    if not incident_id:
+        print("❌ ERRO: incident_id não encontrado na sessão.")
+        return redirect(url_for('incident'))
+
+    class_param = session.get('class')
+    type_param = session.get('type')
+
+    if not class_param or not type_param:
+        return abort(400, description="Parâmetros 'class' e 'type' em falta na sessão.")
+
     incident_steps = load_incident_steps()
     if len(incident_steps) == 1 and isinstance(incident_steps[0], list):
         incident_steps = incident_steps[0]
 
-    if request.method == 'GET':
-        class_param = request.args.get('class_')
-        type_param = request.args.get('type_')
-
-        checked_substeps = request.args.get('checked_substeps')
-    else:
-        json_data = request.get_json(silent=True) or {}
-        class_param = (
-            request.form.get('class') or request.form.get('class_') or
-            json_data.get('class') or json_data.get('class_') or
-            request.args.get('class') or request.args.get('class_')
-        )
-        type_param = (
-            request.form.get('type') or request.form.get('type_') or
-            json_data.get('type') or json_data.get('type_') or
-            request.args.get('type') or request.args.get('type_')
-        )
-
-        checked_substeps = (
-            request.form.get('checked_substeps') or
-            request.args.get('checked_substeps') or
-            json_data.get('checked_substeps')
-        )
-
-    if not class_param or not type_param:
-        return abort(400, description="Parameters 'class' and 'type' are required.")
-
-    # Match steps
+    # Match dos passos
     found_steps = []
     for item in incident_steps:
         if item.get('class', '').strip().lower() == class_param.strip().lower():
@@ -200,15 +257,18 @@ def steps():
                     found_steps = type_item.get('steps', [])
                     break
 
-    # Store in session
-    session['class'] = class_param
-    session['type'] = type_param
+    # Guardar na sessão
     session['steps'] = found_steps
-    session['checked_substeps'] = checked_substeps
     session['start'] = session.get('start') or datetime.now().isoformat()
     session.modified = True
 
-    return render_template('steps.html', checked_substeps=checked_substeps, steps=found_steps, class_=class_param, type_=type_param, show_user_dropdown=True)
+    return render_template(
+        'steps.html',
+        steps=found_steps,
+        class_=class_param,
+        type_=type_param,
+        show_user_dropdown=True
+    )
 
 
 @app.route('/incident/save_step', methods=['POST'])
@@ -217,10 +277,17 @@ def save_step():
     if not username:
         return jsonify({'error': 'Unauthorized'}), 401
 
+    incident_id = session.get('id')
+    if not incident_id:
+        print("❌ ERRO: incident_id não definido na sessão.")
+        return jsonify({'error': 'Incident ID missing in session'}), 400
+
     data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Missing JSON data'}), 400
 
     try:
-        step_index = str(int(data.get('step', -1)))
+        step_index = str(int(data.get('step', -1)) + 1)
     except (TypeError, ValueError):
         return jsonify({'error': 'Invalid step index'}), 400
 
@@ -232,14 +299,20 @@ def save_step():
     if not isinstance(checked_substeps, list):
         return jsonify({'error': 'Invalid substeps format'}), 400
 
-
+    # Atualizar sessão
     evidences = session.setdefault('evidences', {})
     sub_steps = session.setdefault('sub_steps', {})
 
     evidences[step_index] = evidence
     sub_steps[step_index] = checked_substeps
 
+    session['evidences'] = evidences
+    session['sub_steps'] = sub_steps
     session.modified = True
+
+    print(f"✅ Step {step_index} salvo para incidente #{incident_id}")
+    print(f"  ↳ Evidence: {evidence}")
+    print(f"  ↳ Substeps: {checked_substeps}")
 
     return jsonify({'status': 'ok'})
 
@@ -260,6 +333,7 @@ def save_completion():
     if not improvements or not observations:
         return jsonify({'error': 'All fields must be filled'}), 400
 
+    # Datas
     start_time = session.get('start')
     if isinstance(start_time, str):
         try:
@@ -269,54 +343,53 @@ def save_completion():
     elif not start_time:
         start_time = datetime.now()
 
-    end_time = session.get('end', datetime.now())
-    if isinstance(end_time, str):
-        try:
-            end_time = datetime.fromisoformat(end_time)
-        except ValueError:
-            end_time = datetime.now()
-
+    end_time = datetime.now()
     session['end'] = end_time
-    session['lessons'] = {'improvements': improvements, 'observations': observations}
 
+    # Lessons learned
+    session['lessons'] = {
+        'improvements': improvements,
+        'observations': observations
+    }
 
-    incident_class = session.get('class', 'N/A')
-    incident_type = session.get('type', 'N/A')
+    incident_id = session.get('id')
+    print('incident_id:', incident_id)
+    if not incident_id:
+        return jsonify({'error': 'incident_id not found in session'}), 400
 
     try:
-        new_incident = Incident(
-            name=f"{incident_class} - {incident_type}",
-            creation_date=datetime.now(),
-            status="Completed",
-            improvements=improvements,
-            observations=observations,
-            start_datetime=start_time,
-            end_datetime=end_time
-        )
-        db.session.add(new_incident)
-        db.session.commit()
+        incident = Incident.query.get(incident_id)
+        if not incident:
+            return jsonify({'error': 'Incident not found'}), 404
 
-        session['id'] = new_incident.id
+        incident.status = "Completed"
+        incident.improvements = improvements
+        incident.observations = observations
+        incident.start_datetime = start_time
+        incident.end_datetime = end_time
+
+        db.session.commit()
+        print(f"[✔️] Incident #{incident_id} atualizado com sucesso.")
 
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Database error: ' + str(e)}), 500
 
-    session['id'] = new_incident.id
+    # Guardar info para o relatório
     session['incident_submitted'] = True
-
     session['report_data'] = {
-        'class': incident_class,
-        'type': incident_type,
+        'class': session.get('class', 'N/A'),
+        'type': session.get('type', 'N/A'),
         'steps': session.get('steps', []),
         'sub_steps': session.get('sub_steps', {}),
         'evidences': session.get('evidences', {}),
-        'attachments': session.get('attachments', {})
+        'attachments': session.get('report_data', {}).get('attachments', {})
     }
 
     session.modified = True
-
     return jsonify({'status': 'success'}), 200
+
+
 
 
 
@@ -333,44 +406,85 @@ def complete():
 
 @app.route('/incident/upload_file', methods=['POST'])
 def upload_file():
-    step_index = request.form.get('step')
-    file = request.files.get('file')
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'Unauthorized'}), 401
 
-    if step_index is None or file is None:
-        return jsonify({'status': 'fail', 'reason': 'missing data'}), 400
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
 
     try:
-        step_index = str(int(step_index))
-    except ValueError:
-        return jsonify({'status': 'fail', 'reason': 'invalid step index'}), 400
+        step_index = str(int(request.form.get('step', -1)) + 1)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid step index'}), 400
 
-    ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'bmp'}
+    incident_id = session.get('id')
+    if not incident_id:
+        print("❌ ERRO: incident_id não definido na sessão.")
+        return jsonify({'error': 'Incident ID missing in session'}), 400
 
-    def allowed_file(filename):
-        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    # Criar caminho para upload
+    upload_folder = os.path.join('uploads', str(incident_id), step_index)
+    os.makedirs(upload_folder, exist_ok=True)
 
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        incident_id = session.get('id') or '1'
-        upload_folder = os.path.join('uploads', str(incident_id), str(int(step_index) + 1))
-        os.makedirs(upload_folder, exist_ok=True)
+    # Salvar ficheiro com nome seguro
+    filename = secure_filename(file.filename)
+    file_path = os.path.join(upload_folder, filename)
+    file.save(file_path)
 
-        file_path = os.path.join(upload_folder, filename)
-        file.save(file_path)
-        relative_path = os.path.relpath(file_path, start=os.getcwd())
+    # Caminho relativo para uso posterior (e.g., no relatório)
+    relative_path = os.path.join('uploads', str(incident_id), step_index, filename)
 
-        report_data = session.get('report_data', {})
-        attachments = report_data.get('attachments', {})
+    # Atualizar anexos na sessão
+    report_data = session.get('report_data', {})
+    attachments = report_data.get('attachments', {})
+    attachments.setdefault(step_index, []).append(relative_path)
 
-        attachments.setdefault(str(int(step_index) + 1), []).append(relative_path)
-        report_data['attachments'] = attachments
-        session['report_data'] = report_data
-        session.modified = True
+    report_data['attachments'] = attachments
+    session['report_data'] = report_data
+    session.modified = True
 
-        print('UPLOAD OK - ATTACHMENTS:', attachments)
-        return jsonify({'status': 'success'})
+    print(f"✅ Ficheiro '{filename}' guardado para incidente #{incident_id}, step {step_index}")
+    return jsonify({'status': 'success', 'path': relative_path})
 
-    return jsonify({'status': 'fail', 'reason': 'invalid file'}), 400
+
+@app.route('/incident/finish', methods=['POST'])
+def finish_incident():
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    incident_id = session.get('id')
+    if not incident_id:
+        return jsonify({'error': 'Incident ID missing'}), 400
+
+    incident = Incident.query.get(incident_id)
+    if not incident or incident.user != username:
+        return jsonify({'error': 'Not found or not authorized'}), 404
+
+    # Guardar evidências e sub_steps da sessão no modelo
+    incident.evidences = json.dumps(session.get('evidences', {}))
+    incident.sub_steps = json.dumps(session.get('sub_steps', {}))
+    incident.status = "Completed"
+    incident.end = datetime.now()
+
+    db.session.commit()
+
+    # Limpar sessão
+    session.pop('id', None)
+    session.pop('evidences', None)
+    session.pop('sub_steps', None)
+    session.pop('steps', None)
+    session.pop('class', None)
+    session.pop('type', None)
+    session.pop('start', None)
+
+    return jsonify({'status': 'ok'})
+
 
 
 @app.route('/download_report')
@@ -402,32 +516,28 @@ def download_report():
     sub_steps = data.get('sub_steps', {})
     evidences = data.get('evidences', {})
 
-    incident_id = session.get('id', '1')
+    incident_id = session.get('id')
+    if not incident_id:
+        print("ERRO: incident_id não encontrado na sessão.")
+        return redirect(url_for('dashboard'))
 
-    print('INCIDENT ID EQUALS TO:', incident_id)
+    print('INCIDENT ID:', incident_id)
 
+    # Carregar anexos
     upload_base = os.path.join('uploads', str(incident_id))
     attachments = {}
 
-    '''if os.path.exists(upload_base):
+    if os.path.exists(upload_base):
         for step_folder in os.listdir(upload_base):
             step_path = os.path.join(upload_base, step_folder)
             if os.path.isdir(step_path):
                 files = os.listdir(step_path)
                 if files:
-                    attachments[step_folder] = [os.path.join('uploads', str(incident_id), step_folder, f) for f in
-                                                files]'''
+                    attachments[step_folder] = [
+                        os.path.join('uploads', str(incident_id), step_folder, f) for f in files
+                    ]
 
-    if os.path.exists(upload_base):
-        for upload, incident_id in os.listdir(upload_base):
-            step_path = os.path.isdir(upload_base, steps_raw)
-            if os.path.isdir(step_path):
-                files = os.listdir(step_path)
-                if files:
-                    attachments[steps_raw] = [os.path.join('uploads', str(incident_id), steps_raw, f) for f in files]
-
-                    print('ATTACHMENTS 90: ', attachments)
-
+    # Estruturar os passos com subpassos, evidências e anexos
     steps_structured = []
     for index, step in enumerate(steps_raw):
         step_index = str(index + 1)
@@ -440,7 +550,7 @@ def download_report():
 
     dados_template = {
         'current_date': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
-        'incident_id': session.get('id', '1'),
+        'incident_id': incident_id,
         'selected_class': data.get('class', 'N/A'),
         'selected_type': data.get('type', 'N/A'),
         'start_time': start_dt.strftime('%d/%m/%Y %H:%M:%S'),
@@ -453,12 +563,18 @@ def download_report():
     basedir = os.path.abspath(os.path.dirname(__file__))
     template_path = os.path.join(basedir, 'word_templates', 'incidentreport_template.docx')
 
-    pdf_path = gerar_docx_com_dados(dados_template, template_path=template_path)
+    try:
+        pdf_path = gerar_docx_com_dados(dados_template, template_path=template_path)
+    except Exception as e:
+        print("Erro ao gerar PDF:", e)
+        return redirect(url_for('dashboard'))
+
     filename = f"report_{datetime.now().strftime('%d-%m-%Y')}_{dados_template['selected_type'].replace(' ', '_')}.pdf"
 
     session.modified = True
 
     return send_file(pdf_path, as_attachment=True, download_name=filename)
+
 
 
 def flatten_data(data):

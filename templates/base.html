@@ -5,45 +5,133 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Incident Response Plan{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-
-
 </head>
-<body>
-  <header class="page-header" role="banner">
-    {% if show_user_dropdown %}
-    <div class="user-menu">
-      <button class="user-toggle" onclick="toggleDropdown()" aria-haspopup="true" aria-expanded="false">
-        <span class="user-name">{{ session['username'] }}</span>
-        <span class="chevron">▾</span>
+<body class="pt-0 {% if show_user_dropdown %}with-header{% endif %}">
+
+{% if show_user_dropdown %}
+<nav class="navbar navbar-expand-lg bg-body-tertiary py-2">
+  <div class="d-flex w-100 align-items-center justify-content-between px-0">
+
+    <!-- Lado Esquerdo: Mensagem de boas-vindas -->
+    <span class="navbar-text text-muted ps-3">
+      Welcome, {{ session['username'] }}. Here you can manage and review incident response plans.
+    </span>
+
+  <!-- Barra de Pesquisa -->
+<form id="searchForm" class="d-flex mb-3" role="search">
+  <input id="searchInput" class="form-control me-2" type="search" name="query" placeholder="Search..." aria-label="Search">
+  <button class="btn btn-outline-success" type="submit">Search</button>
+</form>
+
+    <!-- Lado Direito: Menu do utilizador -->
+    <div class="dropdown me-3">
+      <button class="btn btn-outline-secondary dropdown-toggle"
+              type="button"
+              id="userDropdown"
+              data-bs-toggle="dropdown"
+              aria-expanded="false">
+        {{ session['username'] }}
       </button>
-      <div id="dropdown-content" class="user-dropdown-content" role="menu" aria-label="User menu">
-        <a href="{{ url_for('logout') }}" role="menuitem">🚪 Logout</a>
-      </div>
+      <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+        <li><a class="dropdown-item" href="{{ url_for('logout') }}">🚪 Logout</a></li>
+      </ul>
     </div>
-    {% endif %}
-  </header>
 
-  <main class="container mt-4 mb-5" role="main">
-    {% block content %}{% endblock %}
-  </main>
+  </div>
+</nav>
+{% endif %}
 
-  <script>
-    function toggleDropdown() {
-      const dropdown = document.getElementById("dropdown-content");
-      const isShown = dropdown.classList.toggle("show");
-      const btn = document.querySelector('.user-toggle');
-      btn.setAttribute('aria-expanded', isShown);
+<main class="container mt-4 mb-5" role="main">
+
+
+  <!-- Onde os resultados vão aparecer -->
+<div id="resultsContainer" class="mt-4"></div>
+
+  {% block content %}{% endblock %}
+</main>
+
+<script>
+  function toggleDropdown() {
+    const dropdown = document.getElementById("dropdown-content");
+    const isShown = dropdown.classList.toggle("show");
+    const btn = document.querySelector('.user-toggle');
+    btn.setAttribute('aria-expanded', isShown);
+  }
+
+  window.addEventListener('click', function(event) {
+    if (!event.target.closest('.user-menu')) {
+      const dropdowns = document.querySelectorAll(".user-dropdown-content");
+      dropdowns.forEach(d => d.classList.remove("show"));
+    }
+  });
+
+document.getElementById("searchForm").addEventListener("submit", async function(e) {
+  e.preventDefault();
+
+  const query = document.getElementById("searchInput").value.trim();
+  if (!query) return;
+
+  const response = await fetch("/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query })
+  });
+
+  const data = await response.json();
+  const container = document.getElementById("resultsContainer");
+  container.innerHTML = "";
+
+  if (!data.results.length) {
+    container.innerHTML = "<p>No results found.</p>";
+    return;
+  }
+
+  // Function to highlight keyword
+  function highlight(text, keyword) {
+    const regex = new RegExp(`(${keyword})`, 'gi');
+    return text.replace(regex, "<mark>$1</mark>");
+  }
+
+  data.results.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "card mb-2";
+    const cardBody = document.createElement("div");
+    cardBody.className = "card-body";
+
+    let title = "";
+    let subtitle = "";
+    let content = "";
+
+    if (item.substep) {
+      title = "Sub-step";
+      subtitle = `${item.class} > ${item.type}`;
+      content = highlight(item.substep, query);
+    } else if (item.step) {
+      title = "Step";
+      subtitle = `${item.class} > ${item.type}`;
+      content = highlight(item.step, query);
+    } else if (item.type) {
+      title = "Type";
+      subtitle = item.class;
+      content = highlight(item.type, query);
+    } else if (item.class) {
+      title = "Class";
+      content = highlight(item.class, query);
     }
 
-    window.addEventListener('click', function(event) {
-      if (!event.target.closest('.user-menu')) {
-        const dropdowns = document.querySelectorAll(".user-dropdown-content");
-        dropdowns.forEach(d => d.classList.remove("show"));
-      }
-    });
-  </script>
+    cardBody.innerHTML = `
+      <h5 class="card-title">${title}</h5>
+      ${subtitle ? `<h6 class="card-subtitle mb-2 text-muted">${subtitle}</h6>` : ""}
+      <p class="card-text">${content}</p>
+    `;
+
+    card.appendChild(cardBody);
+    container.appendChild(card);
+  });
+});
+
+</script>
 </body>
 </html>
-

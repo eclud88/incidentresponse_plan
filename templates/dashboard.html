@@ -13,6 +13,50 @@
   </a>
 </div>
 
+
+
+{% if in_progress_incidents %}
+  <h4>⏳ In Progress</h4>
+  <table class="table table-warning table-hover align-middle">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Description</th>
+        <th>Start Date</th>
+          <th>% Completed</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for incident in in_progress_incidents %}
+      <tr>
+        <td>{{ incident.id }}</td>
+        <td>{{ incident.name }}</td>
+        <td>{{ incident.creation_date.strftime('%d/%m/%Y') }}</td>
+          <td>{{ incident.progress_percentage() }}%</td>
+        <td>
+          <a href="{{ url_for('resume_incident', incident_id=incident.id) }}" class="btn btn-sm btn-primary">
+            ▶️ Resume
+          </a>
+            <div class="progress mt-2" style="height: 5px;">
+  <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress }}%;"></div>
+</div>
+<small>{{ progress }}% done</small>
+
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+
+
+
+
+
+
+
 {% if incidents %}
 <table class="table table-striped table-hover align-middle">
   <thead class="table-dark">
@@ -41,10 +85,6 @@
   </button>
 </td>
 
-
-
-
-
       </td>
       <td>{{ incident.id }}</td>
       <td>{{ incident.name }}</td>
@@ -61,6 +101,7 @@
   No incident records found. Click <strong>+ New Record</strong> to add your first one.
 </div>
 {% endif %}
+
 
 <!-- Modal de confirmação -->
 <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmText" aria-hidden="true">
