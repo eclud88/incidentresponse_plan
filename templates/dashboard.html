@@ -28,25 +28,29 @@
       </tr>
     </thead>
     <tbody>
-      {% for incident in in_progress_incidents %}
-      <tr>
-        <td>{{ incident.id }}</td>
-        <td>{{ incident.name }}</td>
-        <td>{{ incident.creation_date.strftime('%d/%m/%Y') }}</td>
-          <td>{{ incident.progress_percentage() }}%</td>
-        <td>
-          <a href="{{ url_for('resume_incident', incident_id=incident.id) }}" class="btn btn-sm btn-primary">
-            ▶️ Resume
-          </a>
-            <div class="progress mt-2" style="height: 5px;">
-  <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress }}%;"></div>
-</div>
-<small>{{ progress }}% done</small>
+  {% for incident in in_progress_incidents %}
+  <tr>
+    <td>{{ incident.id }}</td>
+    <td>{{ incident.name }}</td>
+    <td>{{ incident.creation_date.strftime('%d/%m/%Y') }}</td>
+    <td>{{ incident.progress_percentage() }}%</td>
+    <td>
+      <a href="{{ url_for('resume_incident', incident_id=incident.id) }}" class="btn btn-sm btn-outline-primary">
+        ▶️ Resume
+      </a>
+      <div class="progress mt-2" style="height: 5px;">
+        <div class="progress-bar bg-success"
+             role="progressbar"
+             style="width: {{ incident.progress_percentage() }}%;"
+             aria-valuenow="{{ incident.progress_percentage() }}"
+             aria-valuemin="0" aria-valuemax="100"></div>
+      </div>
+      <small>{{ incident.progress_percentage() }}% done</small>
+    </td>
+  </tr>
+  {% endfor %}
+</tbody>
 
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
   </table>
 {% endif %}
 

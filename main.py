@@ -42,6 +42,9 @@ STEPS_PATH = os.path.join(basedir, 'incident_steps.json')
 class Incident(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100))
+    incident_class = db.Column(db.String(100))
+    incident_type = db.Column(db.String(100))
+    steps = db.Column(db.Text)
     sub_steps = db.Column(db.Text, nullable=True)
     evidences = db.Column(db.Text, nullable=True)
     creation_date = db.Column(db.DateTime, default=datetime.utcnow)
@@ -186,27 +189,38 @@ def incident():
     )
 
 
-@app.route('/resume_incident/<int:incident_id>')
+@app.route('/incident/resume/<int:incident_id>')
 def resume_incident(incident_id):
-    username = session.get('username')
-    if not username:
-        return redirect(url_for('index'))
-
     incident = Incident.query.get(incident_id)
-    if not incident or incident.status != 'In Progress':
-        flash("Incident not available to resume.", "warning")
+    if not incident:
+        flash("Incident not found.", "warning")
         return redirect(url_for('dashboard'))
 
-    # Recarregar sessão com dados do incidente
-    session['id'] = incident.id
-    session['start'] = incident.start_datetime.isoformat() if incident.start_datetime else datetime.utcnow().isoformat()
-    session['evidences'] = json.loads(incident.evidences or '{}')
+    # Restaurar dados do incidente para a sessão
+    session['incident_id'] = incident.id
+    session['incident_name'] = incident.name
+    session['start_datetime'] = incident.start_datetime.isoformat() if incident.start_datetime else datetime.utcnow().isoformat()
+    session['end_datetime'] = incident.end_datetime.isoformat() if incident.end_datetime else None
+    session['steps'] = json.loads(incident.steps or '[]')
     session['sub_steps'] = json.loads(incident.sub_steps or '{}')
-    session['class'] = incident.name  # ou outro nome
-    session['steps'] = []  # ou recuperar se guardaste
-    session['type'] = 'Retoma'
+    session['evidences'] = json.loads(incident.evidences or '{}')
+    session['selected_class'] = incident.name  # assumindo que name representa a classe
+    session['selected_class'] = incident.incident_class or ''
+    session['selected_type'] = incident.incident_type or ''
+    session['improvements'] = incident.improvements or ''
+    session['observations'] = incident.observations or ''
+    session.modified = True
 
-    return redirect(url_for('incident'))  # ou outro ponto mais específico
+    # Avançar para o próximo passo incompleto
+    steps = session['steps']
+    evidences = session['evidences']
+    for i, step in enumerate(steps, start=1):
+        step_key = str(i)
+        if step_key not in evidences:
+            return redirect(url_for('steps'))  # ou rota relevante
+
+    # Se tudo está preenchido
+    return redirect(url_for('complete'))  # ou para um resumo
 
 
 
@@ -256,6 +270,41 @@ def steps():
                 if type_item.get('type', '').strip().lower() == type_param.strip().lower():
                     found_steps = type_item.get('steps', [])
                     break
+
+    incident = Incident.query.get(incident_id)
+    if incident:
+        incident.steps = json.dumps(found_steps)
+        incident.name = class_param  # usar como nome para mostrar no dashboard
+        db.session.commit()
+
+    if not incident:
+        print("❌ ERRO: incidente não encontrado na BD.")
+        return redirect(url_for('incident'))
+
+    # Verifica se o incidente já tem passos guardados (retoma)
+    if incident.steps:
+        found_steps = json.loads(incident.steps)
+    else:
+        # Gerar os passos pela primeira vez
+        incident_steps = load_incident_steps()
+        if len(incident_steps) == 1 and isinstance(incident_steps[0], list):
+            incident_steps = incident_steps[0]
+
+        for item in incident_steps:
+            if item.get('class', '').strip().lower() == class_param.strip().lower():
+                for type_item in item.get('types', []):
+                    if type_item.get('type', '').strip().lower() == type_param.strip().lower():
+                        found_steps = type_item.get('steps', [])
+                        break
+
+        # Guardar no incidente
+        incident.steps = json.dumps(found_steps)
+        incident.name = class_param  # usar como nome visível
+        incident.incident_class = class_param
+        incident.incident_type = type_param
+        db.session.commit()
+
+
 
     # Guardar na sessão
     session['steps'] = found_steps

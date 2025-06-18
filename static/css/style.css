@@ -7,24 +7,45 @@
 
 /* === BASE === */
 :root {
+  --primary-dark: #4c5ca4;
+  --primary-light: #84acdb;
+  --primary-bg: #e8f4f4;
+
   --purple-main: #7e57c2;
   --purple-hover: #673ab7;
   --purple-gradient-start: #8a00c2;
   --purple-gradient-end: #6b00a8;
+
   --green-active: #0dba6a;
 }
 
 body {
-  background-color: #a26acc;
-  color: #e1d9d1;
+  background-color: var(--primary-dark);
+  color: var(--primary-bg);
   font-family: 'Verdana', sans-serif;
   padding-top: 70px;
   padding-left: 25px;
   padding-right: 25px;
+  overflow-x: hidden;
 }
 
 body.with-header {
   padding-top: 70px;
+}
+
+.center-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: 1rem;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.content-wrapper {
+  width: auto;
+  max-width: 90vw;
 }
 
 h1 {
@@ -36,36 +57,38 @@ h1 {
 
 h2 {
   font-size: 2rem;
-  color: #4b5563;
+  color: var(--primary-dark);
   text-align: center;
   margin-bottom: 30px;
   font-weight: 600;
 }
 
 h3 {
-  color: blue;
+  color: var(--primary-light);
   text-align: center;
 }
 
 /* === COMPONENTS === */
 .card-custom {
-  background-color: white;
+  background-color: var(--primary-bg);
   border-radius: 20px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.1);
   padding: 40px;
+  color: var(--primary-dark);
 }
 
 .card-custom p {
-   color: black;
+   color: var(--primary-dark);
    font-size: 1.6rem;
 }
+
 .card-custom h2 {
-  color: var(--purple-gradient-end);
+  color: var(--primary-dark);
 }
 
 .btn-purple {
-  background-color: var(--purple-gradient-end);
-  color: white;
+  background-color: var(--primary-light);
+  color: var(--primary-dark);
   font-weight: 600;
   border-radius: 15px;
   padding: 10px 20px;
@@ -73,7 +96,7 @@ h3 {
 }
 
 .btn-purple:hover {
-  background-color: #b753f5;
+  background-color: var(--primary-dark);
   color: white;
 }
 
@@ -83,14 +106,13 @@ h3 {
   font-weight: 600;
 }
 
-
 .btn-success:hover {
     background-color: #54bf26;
     color: #000000;
 }
 
 .btn-new {
-  background-color: #10b981;
+  background-color: var(--green-active);
   color: white;
   padding: 12px 26px;
   border: none;
@@ -122,18 +144,15 @@ h3 {
   border-color: #198754 !important;
 }
 
-
 .btn-delete-focus:focus {
   outline: none;
-  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.5); /* Red (Bootstrap danger) */
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.5);
 }
 
 .btn-download-focus:focus {
   outline: none;
-  box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.5); /* Green (Bootstrap success) */
+  box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.5);
 }
-
-
 
 /* === FORMS === */
 .form-label {
@@ -150,8 +169,8 @@ h3 {
 }
 
 .form-control:focus {
-  border-color: #6b00c2;
-  box-shadow: 0 0 0 0.1rem rgba(107, 0, 194, 0.25);
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 0.1rem rgba(132, 172, 219, 0.5);
 }
 
 input[type="file"] {
@@ -177,7 +196,7 @@ input[type="file"] {
 }
 
 .user-toggle {
-  background: linear-gradient(135deg, var(--purple-gradient-start), var(--purple-gradient-end));
+  background: linear-gradient(135deg, var(--primary-light), var(--primary-dark));
   color: white;
   padding: 10px 18px;
   border: none;
@@ -193,7 +212,7 @@ input[type="file"] {
 }
 
 .user-toggle:hover {
-  background: linear-gradient(135deg, #6b00a8, #4c0073);
+  background: linear-gradient(135deg, var(--primary-dark), #333366);
   transform: translateY(-2px);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
 }
@@ -244,7 +263,7 @@ input[type="file"] {
 }
 
 .nav-tabs .nav-link {
-  color: var(--purple-gradient-end);
+  color: var(--primary-dark);
   font-weight: 500;
   border: none;
   border-radius: 10px;
@@ -268,12 +287,12 @@ table {
   border-spacing: 0;
   border-radius: 14px;
   overflow: hidden;
-  background: white;
+  background: var(--primary-bg);
   box-shadow: 0 3px 20px rgba(0, 0, 0, 0.06);
 }
 
 thead tr {
-  background: var(--purple-gradient-end);
+  background: var(--primary-dark);
   color: white;
 }
 
@@ -289,7 +308,7 @@ tbody tr:nth-child(even) {
 }
 
 tbody tr:hover {
-  background-color: #f3e8ff;
+  background-color: #dbeafe;
 }
 
 /* === MODAL === */
@@ -358,7 +377,7 @@ hr {
 
 .custom-separator {
   border: none;
-  border-top: 4px solid #6b00a8;
+  border-top: 4px solid var(--primary-light);
   border-radius: 30px;
   width: 80%;
   margin: 1.5rem auto;
