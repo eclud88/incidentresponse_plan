@@ -14,18 +14,15 @@
           <label for="incident-class" class="form-label">Incident Class</label>
           <select name="class_" id="incident-class" class="form-select" required>
             <option value="" disabled {% if not class_ %}selected{% endif %}>Select here a class</option>
-{% set seen_classes = [] %}
-{% for incident in incidents %}
-  {% if incident['class'] not in seen_classes %}
-    <option value="{{ incident['class'] }}" {% if class_ == incident['class'] %}selected{% endif %}>
-      {{ incident['class'] }}
-    </option>
-    {% set _ = seen_classes.append(incident['class']) %}
-  {% endif %}
-{% endfor %}
-
-
-
+            {% set seen_classes = [] %}
+            {% for incident in incidents_class %}
+              {% if incident['class'] not in seen_classes %}
+                <option value="{{ incident['class'] }}" {% if class_ == incident['class'] %}selected{% endif %}>
+                  {{ incident['class'] }}
+                </option>
+                {% set _ = seen_classes.append(incident['class']) %}
+              {% endif %}
+            {% endfor %}
           </select>
           <div class="form-text">Choose first the incident class.</div>
         </div>
@@ -48,18 +45,21 @@
 </div>
 
 <script>
-  const incidents = {{ incidents | tojson }};
+  const incidents = {{ incidents_class | tojson }};
   const currentClass = "{{ class_ | default('') }}";
   const currentType = "{{ type_ | default('') }}";
 
   const classSelect = document.getElementById('incident-class');
   const typeSelect = document.getElementById('type');
   const submitBtn = document.getElementById('submitBtn');
+  const incidentForm = document.getElementById('incidentForm');
 
+  // Enable submit only when both class and type are selected
   function updateSubmitButton() {
     submitBtn.disabled = !(classSelect.value && typeSelect.value);
   }
 
+  // Populate types dropdown based on selected class
   function updateTypes(preselect = false) {
     const selectedClass = classSelect.value;
     typeSelect.innerHTML = '';
@@ -99,6 +99,7 @@
     updateSubmitButton();
   }
 
+  // Event listeners
   classSelect.addEventListener('change', () => {
     updateTypes();
     updateSubmitButton();
@@ -113,14 +114,32 @@
     updateSubmitButton();
   });
 
-  function toggleDropdown() {
-    document.getElementById("dropdown-content").classList.toggle("show");
-  }
-
-  window.addEventListener('click', function (event) {
-    if (!event.target.closest('.user-toggle')) {
-      document.getElementById("dropdown-content").classList.remove("show");
+  incidentForm.addEventListener('submit', function(event) {
+    event.preventDefault();
+    if (!(classSelect.value && typeSelect.value)) {
+      alert("Please select both incident class and type.");
+      return;
     }
+
+    fetch('{{ url_for('incident') }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        class_: classSelect.value,
+        type_: typeSelect.value
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.text().then(text => { throw new Error(text || "Unknown error occurred"); });
+      }
+      window.location.href = '/incident/steps';
+    })
+    .catch(error => {
+      alert("❌ Error submitting the form: " + error.message);
+    });
   });
+
 </script>
+
 {% endblock %}

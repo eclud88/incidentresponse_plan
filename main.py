@@ -10,7 +10,6 @@ import os
 import io
 import json
 import subprocess
-import platform
 from docx.shared import Inches
 
 
@@ -39,73 +38,95 @@ INCIDENTS_PATH = os.path.join(basedir, 'incidents.json')
 STEPS_PATH = os.path.join(basedir, 'incident_steps.json')
 
 
-class Incident(db.Model):
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    name = db.Column(db.String(100))
-    incident_class = db.Column(db.String(100))
-    incident_type = db.Column(db.String(100))
-    steps = db.Column(db.Text)
-    sub_steps = db.Column(db.Text, nullable=True)
-    evidences = db.Column(db.Text, nullable=True)
-    creation_date = db.Column(db.DateTime, default=datetime.utcnow)
-    status = db.Column(db.String(50), default='In Progress')
-    improvements = db.Column(db.Text)
+class InProgressIncident(db.Model):
+    __tablename__ = 'in_progress_incidents'
+
+    id = db.Column(db.Integer, primary_key=True)
+    class_param = db.Column(db.String(100))
+    type_param = db.Column(db.String(100))
+    start_date = db.Column(db.DateTime, default=datetime.utcnow)
+
+    steps = db.Column(db.PickleType, default=[])
+    evidences = db.Column(db.PickleType, default=[])
     observations = db.Column(db.Text)
-    start_datetime = db.Column(db.DateTime, nullable=True)
-    end_datetime = db.Column(db.DateTime, nullable=True)
+    improvements = db.Column(db.Text)
 
     def progress_percentage(self):
-        try:
-            sub_steps = json.loads(self.sub_steps) if self.sub_steps else {}
-            total_steps = len(sub_steps)
-            if total_steps == 0:
-                return 0
-            completed_steps = sum(1 for step, done in sub_steps.items() if done)
-            return int((completed_steps / total_steps) * 100)
-        except Exception:
-            return 0
+        total = 0
+        filled = 0
+
+        # Steps = 50%
+        total += 50
+        if self.steps:
+            filled += 50
+
+        # Observações + melhorias = 50%
+        total += 50
+        if self.observations and self.improvements:
+            filled += 50
+
+        return int((filled / total) * 100)
 
 
-def load_incidents():
-    with open(INCIDENTS_PATH, 'r', encoding='utf-8') as f:
-        return json.load(f)
+class CompletedIncident(db.Model):
+    __tablename__ = 'completed_incidents'
+
+    id = db.Column(db.Integer, primary_key=True)
+    in_progress_id = db.Column(db.Integer, db.ForeignKey('in_progress_incidents.id'))
+    name = db.Column(db.String(200))
+    start_date = db.Column(db.DateTime)
+    end_date = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(50))
+
+    class_param = db.Column(db.String(100))
+    type_param = db.Column(db.String(100))
+    steps = db.Column(db.PickleType)
+    evidences = db.Column(db.PickleType)
+    observations = db.Column(db.Text)
+    improvements = db.Column(db.Text)
+
+    in_progress = db.relationship('InProgressIncident', backref='completed_incident')
 
 
-def load_incident_steps():
-    with open(STEPS_PATH, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-
+# Create tables (run once, or use migrations)
 with app.app_context():
     db.create_all()
 
 
-@app.route('/incident/<int:incident_id>/second_download')
-def second_download_report(incident_id):
-    pdf_path = os.path.join('reports', f'incident_{incident_id}.pdf')
+def load_in_progress_incidents():
+    return InProgressIncident.query.order_by(InProgressIncident.start_date.desc()).all()
 
-    if os.path.exists(pdf_path):
-        return send_file(pdf_path, as_attachment=True)
-    else:
-        abort(404, description="Report not found.")
+def load_completed_incidents():
+    return CompletedIncident.query.filter(CompletedIncident.status != "In Progress").order_by(CompletedIncident.start_date.desc()).all()
+
+def load_incident_steps():
+    return load_json(STEPS_PATH)
+
+def load_incidents():
+    return load_json(INCIDENTS_PATH)
 
 
-@app.route('/delete_incident/<int:id>', methods=['POST'])
-def delete_incident(id):
-    username = session.get('username')
-    if not username:
-        return jsonify({'error': 'Unauthorized'}), 401
+def check_and_complete_incident(incident_id):
+    incident = InProgressIncident.query.get(incident_id)
 
-    incident = Incident.query.get(id)
-    if not incident:
-        return jsonify({'error': 'Incident not found'}), 404
+    if incident and incident.progress_percentage() == 100:
+        completed = CompletedIncident(
+            in_progress_id=incident.id,
+            name=f"{incident.class_param} - {incident.type_param}",
+            start_date=incident.start_date,
+            end_date=datetime.utcnow(),
+            status="Completed",
+            class_param=incident.class_param,
+            type_param=incident.type_param,
+            steps=incident.steps,
+            evidences=incident.evidences,
+            observations=incident.observations,
+            improvements=incident.improvements
+        )
 
-    try:
+        db.session.add(completed)
         db.session.delete(incident)
         db.session.commit()
-        return jsonify({'status': 'Deleted'})
-    except Exception as e:
-        return jsonify({'error': 'Failed to delete incident'}), 500
 
 
 @app.route('/')
@@ -135,15 +156,57 @@ def logout():
 
 @app.route('/dashboard')
 def dashboard():
-    username = session.get('username')
-    if not username:
-        return redirect(url_for('index'))
+    in_progress_incidents = InProgressIncident.query.order_by(InProgressIncident.start_date.desc()).all()
+    incidents = CompletedIncident.query.order_by(CompletedIncident.id.desc()).all()
+    return render_template('dashboard.html', in_progress_incidents=in_progress_incidents, incidents=incidents)
 
-    incidents = Incident.query.order_by(Incident.creation_date.desc()).all()
 
-    in_progress_incidents = Incident.query.filter_by(status='In Progress').order_by(Incident.creation_date.asc()).all()
+@app.route('/complete_incident/<int:incident_id>', methods=['POST'])
+def complete_incident(incident_id):
+    incident = InProgressIncident.query.get(incident_id)
+    if not incident:
+        return jsonify({'error': 'Incident not found'}), 404
 
-    return render_template('dashboard.html', in_progress_incidents=in_progress_incidents, incidents=incidents, username=username, show_user_dropdown=True)
+    completed = CompletedIncident(
+        id=incident.id,
+        name=incident.name,
+        creation_date=incident.creation_date,
+        end_date=datetime.utcnow(),
+        status='Completed'
+    )
+
+    try:
+        db.session.add(completed)
+        db.session.delete(incident)
+        db.session.commit()
+        return jsonify({'message': 'Incident marked as completed'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/delete_incident/<int:incident_id>', methods=['POST'])
+def delete_incident(incident_id):
+    incident = InProgressIncident.query.get(incident_id)
+    if incident:
+        db.session.delete(incident)
+        db.session.commit()
+        return jsonify({'message': 'Incident deleted from in-progress'}), 200
+
+    incident = CompletedIncident.query.get(incident_id)
+    if incident:
+        db.session.delete(incident)
+        db.session.commit()
+        return jsonify({'message': 'Incident deleted from completed'}), 200
+
+    return jsonify({'error': 'Incident not found'}), 404
+
+
+def load_json(path):
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
 
 
 @app.route('/incident', methods=['GET', 'POST'])
@@ -152,7 +215,11 @@ def incident():
     if not username:
         return redirect(url_for('index'))
 
-    incidents = load_incidents()
+    incidents_class = load_json(INCIDENTS_PATH)
+    incidents_type = load_json(STEPS_PATH)
+
+    incidents_completed = load_completed_incidents()
+    incidents_in_progress = load_in_progress_incidents()
 
     if request.method == 'POST':
         selected_class = request.form.get('class_')
@@ -161,85 +228,80 @@ def incident():
         if selected_class and selected_type:
             session['class'] = selected_class
             session['type'] = selected_type
-            session['start'] = datetime.now()
+            session['start'] = datetime.utcnow().isoformat()
 
             try:
-                new_incident = Incident(
-                    name=f"{selected_class} - {selected_type}",
-                    creation_date=datetime.now(),
-                    status="In Progress"
+                new_incident = InProgressIncident(
+                    class_param=selected_class,
+                    type_param=selected_type,
+                    start_date=datetime.utcnow(),
+                    status='In Progress'
                 )
                 db.session.add(new_incident)
                 db.session.commit()
 
                 session['id'] = new_incident.id
-                print("✅ INCIDENTE CRIADO COM ID:", new_incident.id)
+                return redirect(url_for('steps'))
 
             except Exception as e:
                 db.session.rollback()
-                print("❌ ERRO ao criar incidente:", str(e))
+                print("❌ ERROR creating incident:", str(e))
                 return redirect(url_for('dashboard'))
 
-            return redirect(url_for('steps', class_=selected_class, type_=selected_type))
+        return "Required fields missing", 400
 
     return render_template(
         'incident.html',
-        incidents=incidents,
+        incidents_completed=incidents_completed,
+        incidents_in_progress=incidents_in_progress,
+        incidents_type=incidents_type,
+        incidents_class=incidents_class,
         show_user_dropdown=True
     )
 
 
 @app.route('/incident/resume/<int:incident_id>')
 def resume_incident(incident_id):
-    incident = Incident.query.get(incident_id)
+    incident = InProgressIncident.query.get(incident_id)
     if not incident:
         flash("Incident not found.", "warning")
         return redirect(url_for('dashboard'))
 
-    # Restaurar dados do incidente para a sessão
     session['incident_id'] = incident.id
-    session['incident_name'] = incident.name
-    session['start_datetime'] = incident.start_datetime.isoformat() if incident.start_datetime else datetime.utcnow().isoformat()
-    session['end_datetime'] = incident.end_datetime.isoformat() if incident.end_datetime else None
-    session['steps'] = json.loads(incident.steps or '[]')
-    session['sub_steps'] = json.loads(incident.sub_steps or '{}')
-    session['evidences'] = json.loads(incident.evidences or '{}')
-    session['selected_class'] = incident.name  # assumindo que name representa a classe
-    session['selected_class'] = incident.incident_class or ''
-    session['selected_type'] = incident.incident_type or ''
-    session['improvements'] = incident.improvements or ''
-    session['observations'] = incident.observations or ''
+    session['incident_class'] = incident.class_param
+    session['start_datetime'] = incident.start_date.isoformat() if incident.start_date else datetime.utcnow().isoformat()
+    session['selected_type'] = incident.type_param or ''
     session.modified = True
 
-    # Avançar para o próximo passo incompleto
-    steps = session['steps']
-    evidences = session['evidences']
-    for i, step in enumerate(steps, start=1):
-        step_key = str(i)
-        if step_key not in evidences:
-            return redirect(url_for('steps'))  # ou rota relevante
+    steps = session.get('steps', [])
+    evidences = session.get('evidences', {})
 
-    # Se tudo está preenchido
-    return redirect(url_for('complete'))  # ou para um resumo
+    for i, _ in enumerate(steps, start=1):
+        if str(i) not in evidences:
+            return redirect(url_for('steps'))
 
-
+    return redirect(url_for('complete'))
 
 
 @app.route('/incident/start', methods=['POST'])
 def start_incident():
     if 'id' not in session:
-        new_incident = Incident(
-            name='Em progresso',
-            creation_date=datetime.now(),
+        class_param = session.get('class')
+        new_incident = InProgressIncident(
+            class_param=class_param,
+            start_date=datetime.utcnow(),
             status='In Progress'
         )
         db.session.add(new_incident)
         db.session.commit()
         session['id'] = new_incident.id
         session.modified = True
-        print("🆕 Novo incidente iniciado com ID:", new_incident.id)
     return jsonify({'status': 'ok', 'id': session['id']})
 
+
+from flask import session, redirect, url_for, abort, render_template
+from datetime import datetime
+import json  # só se necessário
 
 @app.route('/incident/steps', methods=['GET', 'POST'])
 def steps():
@@ -247,23 +309,38 @@ def steps():
     if not username:
         return redirect(url_for('index'))
 
-    incident_id = session.get('id')
-    if not incident_id:
-        print("❌ ERRO: incident_id não encontrado na sessão.")
-        return redirect(url_for('incident'))
-
     class_param = session.get('class')
     type_param = session.get('type')
 
     if not class_param or not type_param:
         return abort(400, description="Parâmetros 'class' e 'type' em falta na sessão.")
 
+    incident_id = session.get('id')
+    if not incident_id:
+        # Criar novo incidente e guardar no banco
+        new_incident = InProgressIncident(
+            class_param=class_param,
+            type_param=type_param,
+            start_date=datetime.now()
+        )
+        db.session.add(new_incident)
+        db.session.commit()
+        # Guardar o novo id na sessão para reutilizar
+        session['id'] = new_incident.id
+        incident = new_incident
+    else:
+        incident = InProgressIncident.query.get(incident_id)
+        if not incident:
+            # Caso não exista no DB (ex: id inválido na sessão)
+            return abort(404, description="Incidente não encontrado.")
+
+    # Obter os steps para o incidente (a função load_incident_steps() tem que existir)
     incident_steps = load_incident_steps()
     if len(incident_steps) == 1 and isinstance(incident_steps[0], list):
         incident_steps = incident_steps[0]
 
-    # Match dos passos
     found_steps = []
+
     for item in incident_steps:
         if item.get('class', '').strip().lower() == class_param.strip().lower():
             for type_item in item.get('types', []):
@@ -271,44 +348,14 @@ def steps():
                     found_steps = type_item.get('steps', [])
                     break
 
-    incident = Incident.query.get(incident_id)
-    if incident:
-        incident.steps = json.dumps(found_steps)
-        incident.name = class_param  # usar como nome para mostrar no dashboard
-        db.session.commit()
+    # Guardar steps diretamente (não json.dumps) pois é PickleType
+    incident.steps = found_steps
+    incident.class_param = class_param
+    incident.type_param = type_param
+    db.session.commit()
 
-    if not incident:
-        print("❌ ERRO: incidente não encontrado na BD.")
-        return redirect(url_for('incident'))
-
-    # Verifica se o incidente já tem passos guardados (retoma)
-    if incident.steps:
-        found_steps = json.loads(incident.steps)
-    else:
-        # Gerar os passos pela primeira vez
-        incident_steps = load_incident_steps()
-        if len(incident_steps) == 1 and isinstance(incident_steps[0], list):
-            incident_steps = incident_steps[0]
-
-        for item in incident_steps:
-            if item.get('class', '').strip().lower() == class_param.strip().lower():
-                for type_item in item.get('types', []):
-                    if type_item.get('type', '').strip().lower() == type_param.strip().lower():
-                        found_steps = type_item.get('steps', [])
-                        break
-
-        # Guardar no incidente
-        incident.steps = json.dumps(found_steps)
-        incident.name = class_param  # usar como nome visível
-        incident.incident_class = class_param
-        incident.incident_type = type_param
-        db.session.commit()
-
-
-
-    # Guardar na sessão
     session['steps'] = found_steps
-    session['start'] = session.get('start') or datetime.now().isoformat()
+    session['start'] = session.get('start') or datetime.utcnow().isoformat()
     session.modified = True
 
     return render_template(
@@ -320,6 +367,7 @@ def steps():
     )
 
 
+
 @app.route('/incident/save_step', methods=['POST'])
 def save_step():
     username = session.get('username')
@@ -328,7 +376,6 @@ def save_step():
 
     incident_id = session.get('id')
     if not incident_id:
-        print("❌ ERRO: incident_id não definido na sessão.")
         return jsonify({'error': 'Incident ID missing in session'}), 400
 
     data = request.get_json()
@@ -348,7 +395,6 @@ def save_step():
     if not isinstance(checked_substeps, list):
         return jsonify({'error': 'Invalid substeps format'}), 400
 
-    # Atualizar sessão
     evidences = session.setdefault('evidences', {})
     sub_steps = session.setdefault('sub_steps', {})
 
@@ -358,10 +404,6 @@ def save_step():
     session['evidences'] = evidences
     session['sub_steps'] = sub_steps
     session.modified = True
-
-    print(f"✅ Step {step_index} salvo para incidente #{incident_id}")
-    print(f"  ↳ Evidence: {evidence}")
-    print(f"  ↳ Substeps: {checked_substeps}")
 
     return jsonify({'status': 'ok'})
 
@@ -382,32 +424,29 @@ def save_completion():
     if not improvements or not observations:
         return jsonify({'error': 'All fields must be filled'}), 400
 
-    # Datas
     start_time = session.get('start')
     if isinstance(start_time, str):
         try:
             start_time = datetime.fromisoformat(start_time)
         except ValueError:
-            start_time = datetime.now()
+            start_time = datetime.utcnow()
     elif not start_time:
-        start_time = datetime.now()
+        start_time = datetime.utcnow()
 
-    end_time = datetime.now()
+    end_time = datetime.utcnow()
     session['end'] = end_time
 
-    # Lessons learned
     session['lessons'] = {
         'improvements': improvements,
         'observations': observations
     }
 
     incident_id = session.get('id')
-    print('incident_id:', incident_id)
     if not incident_id:
         return jsonify({'error': 'incident_id not found in session'}), 400
 
     try:
-        incident = Incident.query.get(incident_id)
+        incident = InProgressIncident.query.get(incident_id)
         if not incident:
             return jsonify({'error': 'Incident not found'}), 404
 
@@ -418,13 +457,11 @@ def save_completion():
         incident.end_datetime = end_time
 
         db.session.commit()
-        print(f"[✔️] Incident #{incident_id} atualizado com sucesso.")
 
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Database error: ' + str(e)}), 500
 
-    # Guardar info para o relatório
     session['incident_submitted'] = True
     session['report_data'] = {
         'class': session.get('class', 'N/A'),
@@ -437,9 +474,6 @@ def save_completion():
 
     session.modified = True
     return jsonify({'status': 'success'}), 200
-
-
-
 
 
 @app.route('/incident/complete', methods=['GET', 'POST'])
@@ -511,7 +545,7 @@ def finish_incident():
     if not incident_id:
         return jsonify({'error': 'Incident ID missing'}), 400
 
-    incident = Incident.query.get(incident_id)
+    incident = InProgressIncident.query.get(incident_id)
     if not incident or incident.user != username:
         return jsonify({'error': 'Not found or not authorized'}), 404
 
