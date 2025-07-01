@@ -67,70 +67,76 @@
     }
   });
 
-document.getElementById("searchForm").addEventListener("submit", async function(e) {
-  e.preventDefault();
+  document.addEventListener("DOMContentLoaded", function () {
+    const searchForm = document.getElementById("searchForm");
+    const searchInput = document.getElementById("searchInput");
+    const resultsContainer = document.getElementById("resultsContainer");
 
-  const query = document.getElementById("searchInput").value.trim();
-  if (!query) return;
+    if (!searchForm || !searchInput || !resultsContainer) return;
 
-  const response = await fetch("/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query })
+    searchForm.addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const query = searchInput.value.trim();
+      if (!query) return;
+
+      const response = await fetch("/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query })
+      });
+
+      const data = await response.json();
+      resultsContainer.innerHTML = "";
+
+      if (!data.results.length) {
+        resultsContainer.innerHTML = "<p>No results found.</p>";
+        return;
+      }
+
+      function highlight(text, keyword) {
+        const regex = new RegExp(`(${keyword})`, 'gi');
+        return text.replace(regex, "<mark>$1</mark>");
+      }
+
+      data.results.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "card mb-2";
+        const cardBody = document.createElement("div");
+        cardBody.className = "card-body";
+
+        let title = "";
+        let subtitle = "";
+        let content = "";
+
+        if (item.substep) {
+          title = "Sub-step";
+          subtitle = `${item.class} > ${item.type}`;
+          content = highlight(item.substep, query);
+        } else if (item.step) {
+          title = "Step";
+          subtitle = `${item.class} > ${item.type}`;
+          content = highlight(item.step, query);
+        } else if (item.type) {
+          title = "Type";
+          subtitle = item.class;
+          content = highlight(item.type, query);
+        } else if (item.class) {
+          title = "Class";
+          content = highlight(item.class, query);
+        }
+
+        cardBody.innerHTML = `
+          <h5 class="card-title">${title}</h5>
+          ${subtitle ? `<h6 class="card-subtitle mb-2 text-muted">${subtitle}</h6>` : ""}
+          <p class="card-text">${content}</p>
+        `;
+
+        card.appendChild(cardBody);
+        resultsContainer.appendChild(card);
+      });
+    });
   });
-
-  const data = await response.json();
-  const container = document.getElementById("resultsContainer");
-  container.innerHTML = "";
-
-  if (!data.results.length) {
-    container.innerHTML = "<p>No results found.</p>";
-    return;
-  }
-
-  // Function to highlight keyword
-  function highlight(text, keyword) {
-    const regex = new RegExp(`(${keyword})`, 'gi');
-    return text.replace(regex, "<mark>$1</mark>");
-  }
-
-  data.results.forEach(item => {
-    const card = document.createElement("div");
-    card.className = "card mb-2";
-    const cardBody = document.createElement("div");
-    cardBody.className = "card-body";
-
-    let title = "";
-    let subtitle = "";
-    let content = "";
-
-    if (item.substep) {
-      title = "Sub-step";
-      subtitle = `${item.class} > ${item.type}`;
-      content = highlight(item.substep, query);
-    } else if (item.step) {
-      title = "Step";
-      subtitle = `${item.class} > ${item.type}`;
-      content = highlight(item.step, query);
-    } else if (item.type) {
-      title = "Type";
-      subtitle = item.class;
-      content = highlight(item.type, query);
-    } else if (item.class) {
-      title = "Class";
-      content = highlight(item.class, query);
-    }
-
-    cardBody.innerHTML = `
-      <h5 class="card-title">${title}</h5>
-      ${subtitle ? `<h6 class="card-subtitle mb-2 text-muted">${subtitle}</h6>` : ""}
-      <p class="card-text">${content}</p>
-    `;
-
-    card.appendChild(cardBody);
-    container.appendChild(card);
-  });
-});
 
 </script>
 </body>

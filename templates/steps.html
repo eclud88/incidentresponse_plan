@@ -3,189 +3,201 @@
 
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-lg-10">
-    <div class="card-custom p-4">
-      <h2 class="mb-2 text-center fw-bold" style="letter-spacing: 0.15em;">Incident Response Plan</h2>
+    <div class="col-lg-10">
+        <div class="card-custom p-4">
+            <h2 class="mb-2 text-center fw-bold" style="letter-spacing: 0.15em;">Incident Response Plan</h2>
+            {% set evidences_map = evidences %}
+            {% set substeps_map = sub_steps %}
 
-      {% if class_ and type_ %}
-      <div class="mb-4 text-center">
-        <h5 class="fw-semibold text-muted">
-          Class: <span class="text-primary">{{ class_ }}</span> &nbsp;|&nbsp;
-          Type: <span class="text-primary">{{ type_ }}</span>
-        </h5>
-      </div>
-      {% endif %}
-
-      <ul class="nav nav-tabs justify-content-center" id="stepsTab" role="tablist">
-        {% for step in steps %}
-        <li class="nav-item" role="presentation">
-          <button class="nav-link {% if loop.first %}active{% endif %}"
-                  id="tab-{{ loop.index0 }}"
-                  data-bs-toggle="tab"
-                  data-bs-target="#step-{{ loop.index0 }}"
-                  type="button"
-                  role="tab"
-                  aria-controls="step-{{ loop.index0 }}"
-                  aria-selected="{{ 'true' if loop.first else 'false' }}"
-                  {% if not loop.first %}disabled{% endif %}>
-            Step {{ loop.index }}
-          </button>
-        </li>
-        {% endfor %}
-      </ul>
-
-      <div class="tab-content mt-4" id="stepsTabContent">
-        {% for step in steps %}
-        {% set step_index = loop.index0 %}
-        <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
-             id="step-{{ step_index }}"
-             role="tabpanel"
-             aria-labelledby="tab-{{ step_index }}">
-
-          <p class="fw-bold fs-5 border-start border-4 border-primary ps-3 mb-3">
-            {{ step.step }}
-          </p>
-
-          {% if step.sub_steps %}
-          <div class="mb-4 ms-3">
-            <p class="fw-semibold text-muted mb-2">Sub-Steps Checklist:</p>
-            <div class="list-group">
-              {% for sub in step.sub_steps %}
-              <label class="list-group-item d-flex align-items-center gap-2 border rounded shadow-sm px-3 py-2 mb-2 hover-effect custom-checkbox-label">
-                <input class="form-check-input mt-0 substep-checkbox"
-                       type="checkbox"
-                       id="substep-{{ step_index }}-{{ loop.index0 }}"
-                       value="{{ sub }}"
-                       data-step-index="{{ step_index }}">
-                <span class="substep-text fw-medium">{{ sub }}</span>
-              </label>
-              {% endfor %}
+            {% if class_ and type_ %}
+            <div class="mb-4 text-center">
+                <h5 class="fw-semibold text-muted">
+                    Class: <span class="text-primary">{{ class_ }}</span> &nbsp;|&nbsp;
+                    Type: <span class="text-primary">{{ type_ }}</span>
+                </h5>
             </div>
-          </div>
-          {% endif %}
-
-          <div class="mb-3">
-            <label for="evidence-{{ step_index }}" class="form-label fw-semibold">Evidence(s):</label>
-            <textarea id="evidence-{{ step_index }}" class="form-control" rows="4" required aria-required="true"
-              placeholder="Describe logs, actions taken, screenshots, tools used, findings, or communications. This information will be included in the incident report."></textarea>
-          </div>
-
-          <div class="mb-4">
-            <label for="file-{{ step_index }}" class="form-label fw-semibold">Attach File:</label>
-            <input type="file" class="form-control" id="file-{{ step_index }}" onchange="updateIncident({{ step_index }})">
-            <div id="file-status-{{ step_index }}" class="small mt-1 text-success"></div>
-          </div>
-
-          <div class="d-flex justify-content-between mt-4">
-            {% if not loop.first %}
-            <button class="btn btn-secondary" onclick="goBackStep({{ step_index }})">← Previous</button>
-            {% else %}
-            <span></span>
             {% endif %}
 
-            {% if not loop.last %}
-            <button class="btn btn-secondary" id="btn-next-{{ step_index }}" onclick="nextStep({{ step_index }})" disabled>Next →</button>
-            {% else %}
-            <button class="btn btn-purple" id="btn-finish" onclick="finishPlan()" disabled>✅ Finish Plan</button>
-            {% endif %}
-          </div>
+            <ul class="nav nav-tabs justify-content-center" id="stepsTab" role="tablist">
+                {% for step in steps %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link {% if loop.first %}active{% endif %}"
+                            id="tab-{{ loop.index }}"
+                            data-bs-toggle="tab"
+                            data-bs-target="#step-{{ loop.index }}"
+                            type="button"
+                            role="tab"
+                            aria-controls="step-{{ loop.index }}"
+                            aria-selected="{{ 'true' if loop.first else 'false' }}"
+                            {% if not loop.first %}disabled{% endif %}>
+                        Step {{ loop.index }}
+                    </button>
+                </li>
+                {% endfor %}
+            </ul>
 
+            <div class="tab-content mt-4" id="stepsTabContent">
+                {% for step in steps %}
+                {% set step_index = loop.index %}
+                <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
+                     id="step-{{ step_index }}"
+                     role="tabpanel"
+                     aria-labelledby="tab-{{ step_index }}">
+
+                    <p class="fw-bold fs-5 border-start border-4 border-primary ps-3 mb-3">
+                        {{ step.step }}
+                    </p>
+
+                    {% if step.sub_steps %}
+                    <div class="mb-4 ms-3">
+                        <p class="fw-semibold text-muted mb-2">Sub-Steps Checklist<span class="text-danger">*</span>:</p>
+                        <div class="list-group">
+                            {% for sub in step.sub_steps %}
+                            <label class="list-group-item d-flex align-items-center gap-2 border rounded shadow-sm px-3 py-2 mb-2 hover-effect custom-checkbox-label">
+                                <input class="form-check-input mt-0 substep-checkbox"
+                                       type="checkbox"
+                                       id="step-{{ step_index }}-substep-{{ sub | replace(' ', '-') }}"
+                                       value="{{ sub }}"
+                                       data-step-index="{{ step_index }}"
+                                       {% if sub_steps_data and step_index|string in sub_steps_data and sub in sub_steps_data[step_index|string] %}checked{% endif %}>
+
+                                <span class="substep-text fw-medium">{{ sub }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label for="evidence-{{ step_index }}" class="form-label fw-semibold">Evidence(s)<span class="text-danger">*</span>:</label>
+                        <textarea id="evidence-{{ step_index }}" class="form-control" rows="4" required aria-required="true"
+                                  placeholder="Describe logs, actions taken, screenshots, tools used, findings, or communications. This information will be included in the incident report.">{{ evidences[step_index|string] if evidences and step_index|string in evidences else '' }}</textarea>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="file-{{ loop.index }}" class="form-label fw-semibold">Attach File<span class="text-danger">*</span>:</label>
+                        <input type="file" class="form-control" id="file-{{ loop.index }}" onchange="updateIncident({{ loop.index }})">
+
+                        {% set key = loop.index|string %}
+                        {% set file_path = existing_files[key] if key in existing_files else None %}
+
+
+                        {% if file_path %}
+                        <div id="file-status-{{ loop.index }}" class="small mt-1 text-success">
+                            ✅ Ficheiro já carregado: <a href="/{{ file_path }}" target="_blank">{{ file_path.split('/')[-1] }}</a>
+                        </div>
+                        {% else %}
+                        <div id="file-status-{{ loop.index }}" class="small mt-1 text-danger">
+                        </div>
+                        {% endif %}
+                    </div>
+
+
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        {% if not loop.first %}
+                        <button class="btn btn-secondary" onclick="goBackStep({{ step_index }})">← Previous</button>
+                        {% else %}
+                        <span></span>
+                        {% endif %}
+
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-success btn-sm" onclick="saveStep({{ step_index }})">💾 Save</button>
+                            <span id="feedback-{{ step_index }}" class="text-muted small"></span>
+
+                            {% if not loop.last %}
+                            <button class="btn btn-success" id="btn-next-{{ step_index }}" onclick="nextStep({{ step_index }})" disabled>Next →</button>
+                            {% else %}
+                            <button class="btn btn-purple" id="btn-finish" onclick="finishPlan()" disabled>✅ Finish Plan</button>
+                            {% endif %}
+
+                        </div>
+                    </div>
+
+                </div>
+                {% endfor %}
+            </div>
         </div>
-        {% endfor %}
-      </div>
     </div>
-  </div>
 </div>
 
 <script>
-  function validateStepInputs(index) {
-    const textarea = document.getElementById(`evidence-${index}`);
-    const checkboxes = document.querySelectorAll(`#step-${index} .substep-checkbox`);
-    const hasText = textarea?.value.trim().length > 0;
-    const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
-    return hasText || anyChecked;
-  }
+    const uploadStatus = {};
 
-  async function nextStep(index) {
-    if (!validateStepInputs(index)) {
-      alert('Please provide evidence or check at least one substep before continuing.');
-      document.getElementById(`evidence-${index}`).focus();
-      return;
+    // Dados vindos do backend
+    const savedEvidences = {{ evidences|default({}, true)|tojson }};
+    const savedSubSteps = {{ sub_steps|default({}, true)|tojson }};
+    const existingFiles = {{ existing_files|default({}, true)|safe }};
+    const percent = Number({{ percent|default(0.0)|tojson|safe }});
+
+    function isUploadDone(index) {
+        return uploadStatus[index] === true;
     }
 
-    const textarea = document.getElementById(`evidence-${index}`);
-    const checkedSubsteps = Array.from(
-      document.querySelectorAll(`#step-${index} .substep-checkbox:checked`)
-    ).map(cb => cb.value);
+    function validateStepInputs(index) {
+        const evidence = document.getElementById(`evidence-${index}`).value.trim();
+        const checkedSubsteps = Array.from(
+            document.querySelectorAll(`#step-${index} .substep-checkbox:checked`)
+        );
+        const uploadDone = isUploadDone(index);
+        return evidence.length > 0 && checkedSubsteps.length > 0 && uploadDone;
+    }
 
-    try {
-      await fetch("/incident/save_step", {
+    function updateNextButton(index) {
+        const nextButton = document.getElementById(`btn-next-${index}`);
+        if (!nextButton) return;
+        if (validateStepInputs(index)) {
+            nextButton.disabled = false;
+            nextButton.classList.remove('btn-secondary');
+            nextButton.classList.add('btn-success');
+        } else {
+            nextButton.disabled = true;
+            nextButton.classList.remove('btn-success');
+            nextButton.classList.add('btn-secondary');
+        }
+    }
+
+    function saveStep(index) {
+    const checkedSubsteps = Array.from(
+        document.querySelectorAll(`#step-${index} .substep-checkbox:checked`)
+    ).map(cb => cb.value);
+    const evidence = document.getElementById(`evidence-${index}`).value.trim();
+
+    fetch("/incident/save_step", {
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          step: index,
-          evidence: textarea.value.trim(),
-          checked_substeps: checkedSubsteps
+            step: index,
+            evidence: evidence,
+            checked_substeps: checkedSubsteps
         })
-      });
-
-      const currentTab = document.getElementById(`tab-${index}`);
-      currentTab.classList.add('bg-success', 'text-white');
-
-      const nextTab = document.getElementById(`tab-${index + 1}`);
-      if (nextTab) {
-        nextTab.removeAttribute('disabled');
-        new bootstrap.Tab(nextTab).show();
-      }
-    } catch (err) {
-      alert('Error saving the step. Please try again.');
-      console.error(err);
-    }
-  }
-
-  function goBackStep(index) {
-    const prevTab = document.getElementById(`tab-${index - 1}`);
-    if (prevTab) {
-      new bootstrap.Tab(prevTab).show();
-    }
-  }
-
-  function finishPlan() {
-    const totalSteps = document.querySelectorAll('.tab-pane').length;
-    const index = totalSteps - 1;
-
-    if (!validateStepInputs(index)) {
-      alert('Please provide evidence or check at least one substep before finishing.');
-      document.getElementById(`evidence-${index}`).focus();
-      return;
-    }
-
-    const textarea = document.getElementById(`evidence-${index}`);
-    const checkedSubsteps = Array.from(
-      document.querySelectorAll(`#step-${index} .substep-checkbox:checked`)
-    ).map(cb => cb.value);
-
-    const finishButton = document.getElementById('btn-finish');
-    if (finishButton) finishButton.disabled = true;
-
-    fetch('/incident/save_step', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        step: index,
-        evidence: textarea.value.trim(),
-        checked_substeps: checkedSubsteps
-      })
     })
-    .then(() => {
-      window.location.href = "/incident/complete";
+    .then(res => res.json())
+    .then(data => {
+        const feedback = document.getElementById(`feedback-${index}`);
+        if (data.status === 'ok') {
+            feedback.textContent = "✅ Saved successfully";
+            feedback.classList.remove("text-danger");
+            feedback.classList.add("text-success");
+        } else {
+            feedback.textContent = "❌ Error saving";
+            feedback.classList.remove("text-success");
+            feedback.classList.add("text-danger");
+        }
+        setTimeout(() => feedback.textContent = '', 4000);
+
+        checkProgress(); // <--- ADICIONADO AQUI
     })
-    .catch(() => {
-      alert("Error finishing the plan.");
+    .catch(err => {
+        console.error("Erro técnico ao gravar step:", err);
+        const feedback = document.getElementById(`feedback-${index}`);
+        feedback.textContent = "Technical error.";
+        feedback.classList.add("text-danger");
     });
-  }
+}
 
-  function updateIncident(index) {
+
+   function updateIncident(index) {
     const fileInput = document.getElementById(`file-${index}`);
     const file = fileInput?.files[0];
     if (!file) return;
@@ -195,76 +207,186 @@
     formData.append('step', index);
 
     fetch('/incident/upload_file', {
-      method: 'POST',
-      body: formData
+        method: 'POST',
+        body: formData
     })
     .then(response => response.json())
     .then(data => {
-      const statusElem = document.getElementById(`file-status-${index}`);
-      if (data.status === 'success') {
-        statusElem.textContent = "✅ File uploaded successfully";
-      } else {
-        statusElem.textContent = "❌ Upload failed";
-      }
+        const statusElem = document.getElementById(`file-status-${index}`);
+        if (data.status === 'success') {
+            statusElem.textContent = "✅ File uploaded successfully";
+            statusElem.classList.remove('text-danger');
+            statusElem.classList.add('text-success');
+            uploadStatus[index] = true;
+        } else {
+            statusElem.textContent = "❌ Upload failed";
+            statusElem.classList.remove('text-success');
+            statusElem.classList.add('text-danger');
+            uploadStatus[index] = false;
+        }
+        updateNextButton(index);
+
+        checkProgress();
     })
     .catch(error => {
-      console.error('Error uploading file:', error);
+        const statusElem = document.getElementById(`file-status-${index}`);
+        statusElem.textContent = "❌ Upload error";
+        statusElem.classList.remove('text-success');
+        statusElem.classList.add('text-danger');
+        uploadStatus[index] = false;
+        updateNextButton(index);
+        console.error('Error uploading file:', error);
     });
-  }
+}
 
-  document.addEventListener('DOMContentLoaded', function () {
-    const totalSteps = document.querySelectorAll('.tab-pane').length;
-
-    for (let i = 0; i < totalSteps; i++) {
-      const textarea = document.getElementById(`evidence-${i}`);
-      const checkboxes = document.querySelectorAll(`#step-${i} .substep-checkbox`);
-      const nextButton = document.getElementById(`btn-next-${i}`);
-      const isLast = i === totalSteps - 1;
-      const finishButton = document.getElementById('btn-finish');
-
-      function checkInput() {
-        const shouldEnable = validateStepInputs(i);
-        if (!isLast && nextButton) {
-          nextButton.disabled = !shouldEnable;
-          nextButton.classList.toggle('btn-success', shouldEnable);
-          nextButton.classList.toggle('btn-secondary', !shouldEnable);
-
-          const nextTab = document.getElementById(`tab-${i + 1}`);
-          if (nextTab && shouldEnable) {
-            nextTab.removeAttribute('disabled');
-          }
-        }
-        if (isLast && finishButton) {
-          finishButton.disabled = !shouldEnable;
-          finishButton.classList.toggle('btn-success', shouldEnable);
-          finishButton.classList.toggle('btn-secondary', !shouldEnable);
-        }
-      }
-
-      textarea?.addEventListener('input', checkInput);
-      checkboxes.forEach(cb => cb.addEventListener('change', checkInput));
-      checkInput();
+    function nextStep(currentIndex) {
+        const nextIndex = currentIndex + 1;
+        const nextTabButton = document.getElementById(`tab-${nextIndex}`);
+        if (!nextTabButton) return;
+        nextTabButton.removeAttribute("disabled");
+        const tab = new bootstrap.Tab(nextTabButton);
+        tab.show();
     }
 
-    document.querySelectorAll('.substep-checkbox').forEach(cb => {
-      cb.addEventListener('change', function () {
-        const label = cb.closest('.custom-checkbox-label');
-        if (label) {
-          label.classList.toggle('checked', cb.checked);
+    function goBackStep(currentIndex) {
+        const previousIndex = currentIndex - 1;
+        const prevTabButton = document.getElementById(`tab-${previousIndex}`);
+        if (!prevTabButton) return;
+        prevTabButton.removeAttribute("disabled");
+        const tab = new bootstrap.Tab(prevTabButton);
+        tab.show();
+    }
+
+    function finishPlan() {
+        const lastStepIndex = document.querySelectorAll('.tab-pane').length;
+
+        const checkedSubsteps = Array.from(
+            document.querySelectorAll(`#step-${lastStepIndex} .substep-checkbox:checked`)
+        ).map(cb => cb.value);
+        const evidence = document.getElementById(`evidence-${lastStepIndex}`).value.trim();
+
+        fetch("/incident/save_step", {
+            method: "POST",
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                step: lastStepIndex,
+                evidence: evidence,
+                checked_substeps: checkedSubsteps
+            })
+        })
+            .then(res => res.json())
+            .then(data => {
+                console.log("Resposta do save_step:", data);
+                if (data.status === 'ok') {
+                    if (data.percent === 50.0) {
+                        const finishBtn = document.getElementById('btn-finish');
+                        if (finishBtn) finishBtn.removeAttribute('disabled');
+                        window.location.href = "/incident/complete";
+                    } else {
+                        alert("❌ Ainda há passos incompletos. Verifique antes de finalizar.");
+                    }
+                } else {
+                    alert("❌ Erro ao guardar o último passo.");
+                }
+            })
+            .catch(err => {
+                console.error("Erro técnico ao finalizar o plano:", err);
+                alert("❌ Erro técnico ao finalizar o plano.");
+            });
+    }
+
+    function allStepsValid(totalSteps) {
+        for (let i = 1; i < totalSteps; i++) {
+            if (!validateStepInputs(i)) {
+                return false;
+            }
         }
-      });
+        return true;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const totalSteps = document.querySelectorAll('.tab-pane').length;
+        let allComplete = true;
+
+        for (let i = 1; i < totalSteps; i++) {
+            // Restaurar estado de ficheiro
+            const fileStatusElem = document.getElementById(`file-status-${i}`);
+            const existingPath = existingFiles[i.toString()];
+            if (existingPath) {
+                uploadStatus[i] = true;
+                const fileName = existingPath.split('/').pop();
+                fileStatusElem.innerHTML = `✅ Ficheiro existente: <a href="/${existingPath}" target="_blank">${fileName}</a>`;
+                fileStatusElem.classList.remove('text-danger');
+                fileStatusElem.classList.add('text-success');
+            } else {
+                uploadStatus[i] = false;
+                fileStatusElem.textContent = "❌ Nenhum ficheiro";
+                fileStatusElem.classList.remove('text-success');
+                fileStatusElem.classList.add('text-danger');
+            }
+
+            // Restaurar texto e checkboxes
+            const textarea = document.getElementById(`evidence-${i}`);
+            if (textarea && savedEvidences[i]) {
+                textarea.value = savedEvidences[i];
+            }
+
+            const checkboxes = document.querySelectorAll(`#step-${i} .substep-checkbox`);
+            checkboxes.forEach(cb => {
+                if (savedSubSteps[i]?.includes(cb.value)) {
+                    cb.checked = true;
+                }
+                cb.addEventListener('change', () => updateNextButton(i));
+            });
+
+            textarea?.addEventListener('input', () => updateNextButton(i));
+
+            // Atualizar botão Next
+            updateNextButton(i);
+
+            if (!validateStepInputs(i)) {
+                allComplete = false;
+
+                const nextTabButton = document.getElementById(`tab-${i}`);
+                if (nextTabButton) {
+                    nextTabButton.removeAttribute('disabled');
+                    const tab = new bootstrap.Tab(nextTabButton);
+                    tab.show();
+                }
+                break; // parar no primeiro incompleto
+            }
+        }
     });
 
-    document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(button => {
-      button.addEventListener('shown.bs.tab', function (e) {
-        const targetId = e.target.getAttribute('data-bs-target');
-        const index = parseInt(targetId.split('-')[1]);
-        const textarea = document.getElementById(`evidence-${index}`);
-        if (textarea) {
-          textarea.dispatchEvent(new Event('input'));
-        }
-      });
+    function checkProgress() {
+        fetch('/incident/save_step', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({})
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok' && data.percent === 50.0) {
+                    const finishBtn = document.getElementById('btn-finish');
+                    if (finishBtn) finishBtn.removeAttribute('disabled');
+                }else {
+                    // botão permanece disabled
+                    const finishBtn = document.getElementById('btn-finish');
+                    if (finishBtn) finishBtn.setAttribute('disabled', true);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+            });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        checkProgress();
     });
-  });
+
+
 </script>
+
 {% endblock %}

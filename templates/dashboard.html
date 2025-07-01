@@ -3,9 +3,7 @@
 
 {% block content %}
 
-
 <h1 class="mb-2">D A S H B O A R D</h1>
-
 
 <div class="d-flex justify-content-end my-3">
   <a href="{{ url_for('incident') }}" class="btn btn-success">
@@ -13,53 +11,98 @@
   </a>
 </div>
 
-{% if incidents %}
-<table class="table table-striped table-hover align-middle">
-  <thead class="table-dark">
-    <tr>
-      <th scope="col">Actions</th>
-      <th scope="col">ID</th>
-      <th scope="col">Description</th>
-      <th scope="col">Date</th>
-      <th scope="col">Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for incident in incidents %}
-    <tr>
-      <td>
-        <button class="btn btn-sm btn-outline-danger btn-delete btn-delete-focus" data-id="{{ incident.id }}" title="Delete incident {{ incident.id }}" aria-label="Delete incident {{ incident.id }}">
-          🗑️
-        </button>
-        ||
-  <button class="btn btn-sm btn-outline-success btn-download btn-download-focus"
-          data-id="{{ incident.id }}"
-          title="Download report for incident {{ incident.id }}"
-          aria-label="Download report for incident {{ incident.id }}"><span class="fs-5">
-          📄
-    </span>
-  </button>
-</td>
+{% if in_progress_incidents %}
+  <h4>In Progress</h4>
+  <table class="table table-warning table-hover align-middle">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Description</th>
+        <th>Start Date</th>
+        <th>% Completed</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for incident in in_progress_incidents %}
+      <tr>
+        <td>{{ incident.id }}</td>
+        <td>{{ incident.class }} - {{ incident.type }}</td>
+        <td>{{ incident.start_datetime.strftime('%d/%m/%Y') if incident.start_datetime else '—' }}</td>
+        <td>
+          <div class="progress" style="height: 20px;">
+            <div class="progress-bar bg-info"
+                 role="progressbar"
+                 style="width: {{ incident.percent }}%;"
+                 aria-valuenow="{{ incident.percent }}"
+                 aria-valuemin="0" aria-valuemax="100">
+              {{ incident.percent }}%
+            </div>
+          </div>
+        </td>
+        <td>
+          {% if incident.percent < 100.0 %}
+         <a href="{{ url_for('resume_incident', incident_id=incident.incident_id) }}"
+   class="btn btn-sm btn-outline-primary">
+  ▶️ Resume
+</a>
 
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
 
+{% if completed_incidents %}
+  <h4>Completed</h4>
+  <table class="table table-striped table-hover align-middle">
+    <thead class="table-dark">
+      <tr>
+        <th>ID</th>
+        <th>Description</th>
+        <th>Start Date</th>
+        <th>End Date</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for incident in completed_incidents %}
+      <tr>
+        <td>{{ incident.id }}</td>
+        <td>{{ incident.class }} - {{ incident.type }}</td>
+        <td>{{ incident.start_datetime.strftime('%d/%m/%Y') if incident.start_datetime else '' }}</td>
+        <td>{{ incident.end_datetime.strftime('%d/%m/%Y') if incident.end_datetime else '' }}</td>
+        <td>
+          <span class="badge bg-warning">{{ incident.status }}</span>
+        </td>
+        <td>
+          <button class="btn btn-sm btn-outline-danger btn-delete btn-delete-focus"
+                  data-id="{{ incident.id }}"
+                  title="Delete incident {{ incident.id }}"
+                  aria-label="Delete incident {{ incident.id }}">
+            🗑️
+          </button>
+          ||
+          <button class="btn btn-sm btn-outline-success btn-download btn-download-focus"
+                  data-id="{{ incident.id }}"
+                  title="Download report for incident {{ incident.id }}"
+                  aria-label="Download report for incident {{ incident.id }}">
+            📄
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
 
-
-
-      </td>
-      <td>{{ incident.id }}</td>
-      <td>{{ incident.name }}</td>
-      <td>{{ incident.creation_date.strftime('%d/%m/%Y') if incident.creation_date else '' }}</td>
-      <td>
-        <span class="badge bg-secondary">{{ incident.status }}</span>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<div class="alert alert-info text-center" role="alert">
-  No incident records found. Click <strong>+ New Record</strong> to add your first one.
-</div>
+{% if not in_progress_incidents and not completed_incidents %}
+  <div class="alert alert-info text-center" role="alert">
+    No incident records found. Click <strong>+ New Record</strong> to add your first one.
+  </div>
 {% endif %}
 
 <!-- Modal de confirmação -->
@@ -76,8 +119,10 @@
 </div>
 
 <script>
+
   let idToDelete = null;
 
+  // Delete buttons
   document.querySelectorAll('.btn-delete').forEach(btn => {
     btn.addEventListener('click', () => {
       idToDelete = btn.getAttribute('data-id');
@@ -90,7 +135,7 @@
     if (!idToDelete) return;
     const csrfToken = getCookie('csrf_token');
 
-    fetch(`/delete_incident/${idToDelete}`, {
+    fetch(`/incident/delete/${idToDelete}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -117,6 +162,7 @@
     idToDelete = null;
   });
 
+  // Helper to get CSRF token from cookie
   function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -132,53 +178,30 @@
     return cookieValue;
   }
 
-
-
-  document.addEventListener('DOMContentLoaded', function () {
-    const downloadButtons = document.querySelectorAll('.btn-download');
-
-    downloadButtons.forEach(button => {
-      button.addEventListener('click', function () {
-        const incidentId = this.getAttribute('data-id');
-
-        // Create a hidden link element
-        const link = document.createElement('a');
-        link.href = `/incident/${incidentId}/download`;
-        link.download = '';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      });
-    });
-  });
-
-
-
+  // Download buttons
   document.addEventListener('DOMContentLoaded', function () {
     const downloadButtons = document.querySelectorAll('.btn-download');
 
     downloadButtons.forEach(button => {
       button.addEventListener('click', async function () {
         const incidentId = this.getAttribute('data-id');
-        const buttonEl = this;
+        if (!incidentId) {
+          alert("⚠️ Invalid incident ID.");
+          return;
+        }
 
         try {
-          // Check if the file exists before trying to download
-          const headResponse = await fetch(`/incident/${incidentId}/download`, {
-            method: 'HEAD'
-          });
-
+          const headResponse = await fetch(`/incident/${incidentId}/second_download`, { method: 'HEAD' });
           if (!headResponse.ok) {
             alert("⚠️ Report file not found for incident " + incidentId);
-            buttonEl.disabled = true;
-            buttonEl.classList.add('btn-secondary');
-            buttonEl.classList.remove('btn-outline-primary');
+            this.disabled = true;
+            this.classList.add('btn-secondary');
+            this.classList.remove('btn-outline-success');
             return;
           }
 
-          // Trigger download
           const link = document.createElement('a');
-          link.href = `/incident/${incidentId}/download`;
+          link.href = `/incident/${incidentId}/second_download`;
           link.download = '';
           document.body.appendChild(link);
           link.click();
@@ -190,6 +213,5 @@
       });
     });
   });
-
 </script>
 {% endblock %}
