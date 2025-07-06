@@ -99,7 +99,9 @@
                         {% else %}
                         <span></span>
                         {% endif %}
-
+                        <button id="homeButton" type="button" class="btn btn-outline-secondary fw-bold px-4">
+    🔙 Dashboard
+  </button>
                         <div class="d-flex gap-2">
                             <button class="btn btn-outline-success btn-sm" onclick="saveStep({{ step_index }})">💾 Save</button>
                             <span id="feedback-{{ step_index }}" class="text-muted small"></span>
@@ -121,6 +123,14 @@
 </div>
 
 <script>
+    const homeBtn = document.getElementById('homeButton');
+
+    homeBtn.addEventListener('click', function () {
+    if (homeBtn) {
+      window.location.href = "{{ url_for('dashboard') }}";
+    }
+  });
+
     const uploadStatus = {};
 
     // Dados vindos do backend

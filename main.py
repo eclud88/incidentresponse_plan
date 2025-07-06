@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, abort, send_file, session, jsonify, flash
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
+from openpyxl.styles.builtins import percent
 from werkzeug.utils import secure_filename
 from fpdf import FPDF
 from docxtpl import DocxTemplate, InlineImage
@@ -44,7 +45,7 @@ class Incident(db.Model):
     incident_type = db.Column(db.String(100))
     steps = db.Column(db.Text)
     sub_steps = db.Column(db.Text)
-    evidences = db.Column(db.Text)
+    evidence = db.Column(db.Text)
     attachments = db.Column(db.Text)
     upload_status = db.Column(db.Boolean, default=False)
     creation_date = db.Column(db.DateTime, default=datetime.utcnow)
@@ -67,10 +68,11 @@ class IncidentStep(db.Model):
     evidence = db.Column(db.Text)
     sub_steps = db.Column(db.Text)
     attachment_name = db.Column(db.String(255))
+    upload_status = db.Column(db.Boolean, default=False)
     start_datetime = db.Column(db.DateTime, default=datetime.utcnow)
     improvements = db.Column(db.Text)
     observations = db.Column(db.Text)
-    percent_complete = db.Column(db.Integer, default=0.0)
+    percent_complete = db.Column(db.Float, default=0.0)
     status = db.Column(db.String(50), default='In Progress')
 
     incident = db.relationship('Incident', backref=db.backref('steps_data', lazy=True))
@@ -88,30 +90,6 @@ class IncidentStep(db.Model):
         db.session.commit()
         return pct
 
-    def progress_percentage(self):
-        """50% pelos steps concluídos + 50% por improvements+observations."""
-        # 1) Steps
-        try:
-            step_list = json.loads(self.steps or '[]')
-            ev = json.loads(self.evidences or '{}')
-            at = json.loads(self.attachments or '{}')
-            total = len(step_list)
-            if total:
-                done = sum(
-                    1 for i in range(1, total + 1)
-                    if ev.get(str(i), '').strip() and at.get(str(i), [])
-                )
-                step_score = (done / total) * 50
-            else:
-                step_score = 0.0
-        except Exception:
-            step_score = 0.0
-
-        # 2) Lessons learned
-        text_score = 50.0 if (self.improvements and self.observations) else 0.0
-
-        return int(round(step_score + text_score))
-
     def get_ordered_step_keys(self):
         try:
             steps = json.loads(self.steps or '[]')
@@ -121,13 +99,13 @@ class IncidentStep(db.Model):
 
     def update_next_incomplete_step(self):
         sub_steps = json.loads(self.sub_steps or '{}')
-        evidences = json.loads(self.evidences or '{}')
+        evidence = json.loads(self.evidence or '{}')
         attachments = json.loads(self.attachments or '{}')
         ordered_steps = self.get_ordered_step_keys()  # ['1', '2', '3', ...]
 
         for step in ordered_steps:
             has_substeps = len(sub_steps.get(step, [])) > 0
-            has_evidence = len(evidences.get(step, '').strip()) > 0
+            has_evidence = len(evidence.get(step, '').strip()) > 0
             has_attachment = len(attachments.get(step, [])) > 0
 
             if not (has_substeps and has_evidence and has_attachment):
@@ -143,14 +121,14 @@ class IncidentStep(db.Model):
 
     def is_complete(self):
         sub_steps = json.loads(self.sub_steps or '{}')
-        evidences = json.loads(self.evidences or '{}')
+        evidence = json.loads(self.evidence or '{}')
         attachments = json.loads(self.attachments or '{}')
         ordered_steps = self.get_ordered_step_keys()
 
         for step in ordered_steps:
             if not (
                 len(sub_steps.get(step, [])) > 0 and
-                len(evidences.get(step, '').strip()) > 0 and
+                len(evidence.get(step, '').strip()) > 0 and
                 len(attachments.get(step, [])) > 0
             ):
                 return False
@@ -158,21 +136,23 @@ class IncidentStep(db.Model):
 
     def get_next_step_from_data(self):
         try:
-            step_keys = self.get_ordered_step_keys()  # ['1', '2', '3', ...]
+            step_keys = self.get_ordered_step_keys()  # Ex: ['1', '2', '3', ...]
 
             for step_index in step_keys:
                 step = IncidentStep.query.filter_by(incident_id=self.id, step_index=step_index).first()
 
+                # Verifica se o step está ausente ou incompleto
                 if not step or not (
-                        step.evidence and step.sub_steps and step.attachment_name
-                        and step.sub_steps != '[]' and step.attachment_name.strip() != ''
+                        step.evidence and step.sub_steps and step.attachment_name and
+                        step.sub_steps != '[]' and step.attachment_name.strip() != ''
                 ):
-                    return int(step_index) == 1  # step incompleto encontrado
+                    return int(step_index)  # Retorna o índice do primeiro step incompleto
 
-            # Se todos os steps estiverem completos, mas ainda faltar lessons learned
+            # Todos os steps estão completos, verifica se falta lições aprendidas
             if not (self.improvements and self.observations):
                 return "lessons_learned"
 
+            # Tudo completo
             return None
 
         except Exception as e:
@@ -201,7 +181,7 @@ class IncidentStep(db.Model):
         # Restaurar os IncidentStep específicos do incidente
         step_data = IncidentStep.query.filter_by(incident_id=incident.id).all()
 
-        evidences = {}
+        evidence = {}
         sub_steps = {}
         attachments = {}
 
@@ -210,7 +190,7 @@ class IncidentStep(db.Model):
             idx = str(getattr(sd, 'step_index', None) or sd.id)  # fallback para id se step_index não existir
 
             if sd.evidence:
-                evidences[idx] = sd.evidence
+                evidence[idx] = sd.evidence
 
             if sd.sub_steps:
                 try:
@@ -221,7 +201,7 @@ class IncidentStep(db.Model):
             if sd.attachment_name:
                 attachments[idx] = [sd.attachment_name]  # em lista, como esperado no template
 
-        session['evidences'] = evidences
+        session['evidence'] = evidence
         session['sub_steps'] = sub_steps
         session['attachments'] = attachments
 
@@ -240,6 +220,84 @@ def load_incident_steps():
 
 with app.app_context():
     db.create_all()
+
+
+
+def progress_calculation(incident_id):
+    percent_complete = compute_percent_complete(incident_id)
+    return jsonify({'status': 'ok', 'percent_complete': percent_complete})
+
+
+
+def compute_percent_complete(incident_id):
+    try:
+        incident = IncidentStep.query.filter_by(incident_id=incident_id).first()
+        if not incident:
+            print(f"[Progresso] Incidente {incident_id} não encontrado.")
+            return 0.0
+
+        # Previne erro de atributo None
+        incident_class = (incident.incident_class or "").strip().lower()
+        incident_type = (incident.incident_type or "").strip().lower()
+
+        # Carregar os steps definidos para a class+type do incidente
+        all_steps = load_incident_steps()
+        selected_steps = []
+        for item in all_steps:
+            if item.get('class', '').strip().lower() == incident_class:
+                for type_item in item.get('types', []):
+                    if type_item.get('type', '').strip().lower() == incident_type:
+                        selected_steps = type_item.get('steps', [])
+                        break
+                break
+
+        total_steps = len(selected_steps)
+        if total_steps == 0:
+            print(f"[Progresso] Incidente {incident_id} sem passos definidos para classe/tipo.")
+            return 0.0
+
+        # Carregar dados do progresso salvos nos steps individuais
+        step_rows = IncidentStep.query.filter_by(incident_id=incident_id).all()
+
+        evidences = {str(s.step_index): s.evidence for s in step_rows if s.step_index is not None}
+        sub_steps = {str(s.step_index): json.loads(s.sub_steps or "[]") for s in step_rows if s.step_index is not None}
+        attachments = {str(s.step_index): s.attachment_name for s in step_rows if s.step_index is not None}
+
+        completed = 0
+        for i in range(1, total_steps + 1):
+            ev = (evidences.get(str(i)) or "").strip()
+            subs = sub_steps.get(str(i), [])
+            attach = (attachments.get(str(i)) or "").strip()
+
+            ev_ok = bool(ev)
+            subs_ok = bool(subs)
+            attach_ok = bool(attach)
+
+            if ev_ok and subs_ok and attach_ok:
+                completed += 1
+
+            print(f"Step {i}: evidence={'✅' if ev_ok else '❌'}, sub_steps={'✅' if subs_ok else '❌'}, attachment={'✅' if attach_ok else '❌'}")
+
+        step_progress = (completed / total_steps) * 50.0
+
+        # Verificar observações/melhorias
+        extra_progress = 0.0
+        if any((s.observations or "").strip() for s in step_rows):
+            extra_progress += 25.0
+        if any((s.improvements or "").strip() for s in step_rows):
+            extra_progress += 25.0
+
+        percent = round(step_progress + extra_progress, 2)
+        print(f"[Progresso] Incidente {incident_id}: {completed}/{total_steps} passos completos — {percent}% completo.")
+        return percent
+
+    except Exception as e:
+        print(f"[Erro] Falha ao calcular progresso do incidente {incident_id}: {e}")
+        return 0.0
+
+
+
+
 
 
 @app.route('/incident/<int:incident_id>/second_download')
@@ -298,50 +356,72 @@ def dashboard():
     if 'username' not in session:
         return redirect(url_for('index'))
 
-    steps = IncidentStep.query.order_by(IncidentStep.start_datetime.desc()).all()
+    # Apresenta apenas 1 por incidente
+    in_progress_incidents = (
+        db.session.query(IncidentStep)
+        .filter(IncidentStep.status != 'Completed')
+        .order_by(IncidentStep.id.asc())
+        .all()
+    )
 
-    grouped = {}
-    for step in steps:
-        grouped.setdefault(step.incident_id, []).append(step)
-
-    incidents = []
-    for incident_id, step_list in grouped.items():
-        first = sorted(step_list, key=lambda s: s.start_datetime)[0] if step_list else None
-
-        completed = [
-            s for s in step_list if s.evidence and s.sub_steps and s.attachment_name
-        ]
-        total = len(step_list)
-        step_percent = (len(completed) / total * 50) if total else 0
-
-        text_percent = 0
-        if first:
-            if first.observations and first.observations.strip():
-                text_percent += 25
-            if first.improvements and first.improvements.strip():
-                text_percent += 25
-
-        percent = round(step_percent + text_percent, 1)
-
-        incidents.append({
-            'incident_id': incident_id,
-            'class': first.incident_class if first else '',
-            'type': first.incident_type if first else '',
-            'start_datetime': first.start_datetime if first else '',
-            'status': first.status if first else '',
-            'percent': percent,
-        })
-
-    in_progress = [i for i in incidents if i['percent'] < 100.0]
-    completed = [i for i in incidents if i['percent'] == 100.0]
+    completed_incidents = (
+        db.session.query(Incident)
+        .filter(Incident.status == 'Completed')
+        .order_by(Incident.id.asc())
+        .all()
+    )
 
     return render_template(
         'dashboard.html',
-        in_progress_incidents=in_progress,
-        completed_incidents=completed,
-        username=session['username'],
-        show_user_dropdown=True
+        in_progress_incidents=in_progress_incidents,
+        completed_incidents=completed_incidents
     )
+
+
+
+@app.route('/incident/start', methods=['POST'])
+def start_incident():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data sent'}), 400
+
+    incident_class = data.get('incident_class', '').strip()
+    incident_type = data.get('incident_type', '').strip()
+    steps = data.get('steps', [])
+
+    if not incident_class or not incident_type:
+        return jsonify({'error': 'Missing incident class or type'}), 400
+
+    try:
+        # Cria novo registo Incident com ID automático
+        new_incident = IncidentStep(
+            incident_class=incident_class,
+            incident_type=incident_type,
+            steps=json.dumps(steps),
+            start_datetime=datetime.utcnow(),
+            status="In Progress"
+        )
+        db.session.add(new_incident)
+        db.session.commit()
+
+        # Agora cria o primeiro passo
+        step = IncidentStep(
+            incident_id=new_incident.id,
+            step_index=1,
+            incident_class=incident_class,
+            incident_type=incident_type,
+            steps=json.dumps(steps),
+            percent_complete=0.0,
+            status="In Progress"
+        )
+        db.session.add(step)
+        db.session.commit()
+
+        return jsonify({'status': 'ok', 'incident_id': new_incident.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Database error: {e}'}), 500
+
 
 
 @app.route('/incident', methods=['GET', 'POST'])
@@ -363,11 +443,8 @@ def incident():
             })
 
             try:
-                last = IncidentStep.query.order_by(IncidentStep.incident_id.desc()).first()
-                next_id = 1 if not last else last.incident_id + 1
-
+                # Cria novo Incident
                 new_incident = IncidentStep(
-                    incident_id=next_id,
                     incident_class=selected_class,
                     incident_type=selected_type,
                     start_datetime=session['start'],
@@ -375,7 +452,22 @@ def incident():
                 )
                 db.session.add(new_incident)
                 db.session.commit()
-                session['id'] = new_incident.id
+
+                session['incident_id'] = new_incident.id
+                if not new_incident.id:
+                    new_incident.id = 1
+
+                # Cria primeiro step
+                new_step = IncidentStep(
+                    incident_id=new_incident.id,
+                    step_index=1,
+                    incident_class=selected_class,
+                    incident_type=selected_type,
+                    start_datetime=session['start'],
+                    status="In Progress"
+                )
+                db.session.add(new_step)
+                db.session.commit()
 
                 return redirect(url_for(
                     'steps',
@@ -393,7 +485,6 @@ def incident():
         incidents=incidents,
         show_user_dropdown=True
     )
-
 
 @app.route('/incident/resume/<int:incident_id>')
 def resume_incident(incident_id):
@@ -442,20 +533,21 @@ def step_view(incident_id, step_id):
     except (ValueError, TypeError):
         sub_steps_list = []
 
-    evidences = session.get('evidences', {})
+    evidence = session.get('evidence', {})
     attachments = session.get('attachments', {})
 
     steps = []
     for idx, title in enumerate(steps_titles):
         substeps_for_step = sub_steps_list[idx] if isinstance(sub_steps_list, list) and idx < len(sub_steps_list) else []
         steps.append({'step': title, 'sub_steps': substeps_for_step})
+        break
 
     # Extract first file from attachments per step
     existing_files = {k: v[0] for k, v in attachments.items() if isinstance(v, list) and v}
 
     # Incident properties, fallback to None if missing
-    class_ = getattr(incident, 'class_', None)
-    type_ = getattr(incident, 'type_', None)
+    class_ = getattr(incident, 'incident_class')
+    type_ = getattr(incident, 'incident_type')
 
     # `percent` is not defined here in original, assuming 0 or calculate if needed
     percent = getattr(incident, 'percent_complete', 0)
@@ -463,7 +555,7 @@ def step_view(incident_id, step_id):
     return render_template(
         'steps.html',
         steps=steps,
-        evidences=evidences,
+        evidence=evidence,
         sub_steps=sub_steps_list,
         existing_files=existing_files,
         percent=percent,
@@ -478,14 +570,12 @@ def steps():
     if 'username' not in session:
         return redirect(url_for('index'))
 
-    incident_id = session.get('id')
     class_param = session.get('class')
     type_param = session.get('type')
 
     if not class_param or not type_param:
-        abort(400, description="Missing 'class' or 'type' parameters in session.")
+        abort(400, description="Missing 'class' or 'type' in session.")
 
-    # Load step definitions (from JSON or other source)
     all_steps_data = load_incident_steps()
     if len(all_steps_data) == 1 and isinstance(all_steps_data[0], list):
         all_steps_data = all_steps_data[0]
@@ -497,74 +587,73 @@ def steps():
                 if type_item.get('type', '').strip().lower() == type_param.strip().lower():
                     found_steps = type_item.get('steps', [])
                     break
+            break
 
     session['total_steps'] = len(found_steps)
 
-    if not incident_id:
-        # No incident in session → create new one
-        incident = IncidentStep(
-            incident_class=class_param,
-            incident_type=type_param,
-            steps=json.dumps(found_steps),
-            status="In Progress",
-            start_datetime=datetime.utcnow()
-        )
-        db.session.add(incident)
-        db.session.commit()
-        session['id'] = incident.id
-        incident_id = incident.id
+    # Verificar se já existe incidente em curso
+    incident_id = session.get('incident_id')
+    incident = None
 
-    else:
-        # incident_id present, try to load from DB
-        incident = Incident.query.get(incident_id)
+    if incident_id:
+        incident = IncidentStep.query.filter_by(incident_id=incident_id).first()
 
-        if not incident:
-            # Incident not found in DB, create a new one instead of using id=1 forcibly
-            incident = IncidentStep(
+    if not incident:
+        # Criar novo IncidentStep com novo incident_id
+        last = IncidentStep.query.order_by(IncidentStep.incident_id.desc()).first()
+        next_id = (last.incident_id + 1) if last else 1
+        now = datetime.utcnow()
+
+        try:
+            new_incident = IncidentStep(
+                incident_id=next_id,
                 incident_class=class_param,
                 incident_type=type_param,
                 steps=json.dumps(found_steps),
-                status="In Progress",
-                start_datetime=datetime.utcnow()
+                start_datetime=now,
+                status="In Progress"
             )
-            db.session.add(incident)
+            db.session.add(new_incident)
             db.session.commit()
-            session['id'] = incident.id
-            incident_id = incident.id
-        else:
-            # Update existing incident if needed
-            updated = False
-            if incident.incident_class != class_param:
-                incident.incident_class = class_param
-                updated = True
-            if incident.incident_type != type_param:
-                incident.incident_type = type_param
-                updated = True
-            if json.loads(incident.steps or "[]") != found_steps:
-                incident.steps = json.dumps(found_steps)
-                updated = True
-            if incident.status != "In Progress":
-                incident.status = "In Progress"
-                updated = True
-            if updated:
-                db.session.commit()
 
-    # Retrieve all steps for this incident
-    steps_data = IncidentStep.query.filter_by(incident_id=incident_id).all()
+            session.update({
+                'incident_id': next_id,
+                'start_datetime': now.isoformat(),
+                'class': class_param,
+                'type': type_param
+            })
 
-    evidences = {str(s.step_index): s.evidence for s in steps_data if s.evidence}
-    sub_steps = {str(s.step_index): json.loads(s.sub_steps or "[]") for s in steps_data if s.sub_steps}
-    existing_files = {str(s.step_index): s.attachment_name for s in steps_data if s.attachment_name}
+            incident = new_incident
 
-    saved_indices = [s.step_index for s in steps_data if s.step_index is not None]
+        except Exception as e:
+            db.session.rollback()
+            abort(500, description=f"Erro ao criar novo IncidentStep: {str(e)}")
+
+    # Extrair os dados que já foram preenchidos (por step index)
+    all_data = [incident]  # só há 1 incidente em andamento
+
+    evidence = {}
+    sub_steps = {}
+    existing_files = {}
+
+    if incident.evidence:
+        evidence = json.loads(incident.evidence or '')
+    if incident.sub_steps:
+        sub_steps = json.loads(incident.sub_steps or '')
+    if incident.attachment_name:
+        existing_files = json.loads(incident.attachment_name or '')
+
+    saved_indices = [int(k) for k in evidence.keys()]
     start_index = max(saved_indices) if saved_indices else 0
 
-    # Calculate progress
-    completed_steps = [
-        s for s in steps_data if s.evidence and s.sub_steps and s.attachment_name
-    ]
+    # Calcular progresso
+    completed_count = sum(
+        1 for idx in range(len(found_steps))
+        if str(idx) in evidence and str(idx) in sub_steps and str(idx) in existing_files
+    )
+
     total_steps = len(found_steps)
-    step_progress = round((len(completed_steps) / total_steps) * 50.0, 1) if total_steps else 0.0
+    step_progress = round((completed_count / total_steps) * 50.0, 1) if total_steps else 0.0
 
     lessons_progress = 0.0
     if incident.observations and incident.observations.strip():
@@ -574,9 +663,12 @@ def steps():
 
     percent = round(step_progress + lessons_progress, 1)
 
-    # Update session info
-    session['session_inprogress'] = str(incident_id)
-    session['start'] = session.get('start') or datetime.utcnow().isoformat()
+    # Atualizar percent_complete
+    incident.percent_complete = percent
+    db.session.commit()
+
+    session['session_inprogress'] = str(incident.incident_id)
+    session['start'] = session.get('start') or incident.start_datetime.isoformat()
     session.modified = True
 
     return render_template(
@@ -587,44 +679,12 @@ def steps():
         type_=type_param,
         show_user_dropdown=True,
         start_index=start_index,
-        evidences=evidences,
+        evidence=evidence,
         sub_steps=sub_steps,
-        upload_status={},  # If used, otherwise remove
+        upload_status={},
         existing_files=existing_files,
         percent=percent
     )
-
-
-def calcular_progresso(incident_id):
-    incident = IncidentStep.query.get(incident_id)
-    if not incident:
-        return jsonify({'error': 'Incident not found'}), 404
-
-    total_steps = session.get('total_steps') or len(json.loads(incident.steps or "[]"))
-
-    completed_steps = IncidentStep.query.filter(
-        IncidentStep.incident_id == incident_id,
-        IncidentStep.evidence.isnot(None), IncidentStep.evidence != '',
-        IncidentStep.sub_steps.isnot(None), IncidentStep.sub_steps != '[]',
-        IncidentStep.attachment_name.isnot(None), IncidentStep.attachment_name != ''
-    ).count()
-
-    step_progress = round((completed_steps / total_steps) * 50, 1) if total_steps else 0.0
-
-    extra_progress = 0
-    if incident.observations and incident.observations.strip():
-        extra_progress += 25
-    if incident.improvements and incident.improvements.strip():
-        extra_progress += 25
-
-    percent = round(step_progress + extra_progress, 2)
-    incident.percent_complete = percent
-    incident.status = "Complete" if percent == 100.0 else "In Progress"
-    db.session.commit()
-
-    print(f"[Progress] {completed_steps}/{total_steps} steps — {percent:.1f}% complete.")
-    return jsonify({'status': 'ok', 'percent': percent})
-
 
 
 @app.route('/incident/save_step', methods=['POST'])
@@ -633,24 +693,27 @@ def save_step():
     if not username:
         return jsonify({'error': 'Unauthorized'}), 401
 
-    incident_id = session.get('id')
+    incident_id = session.get('incident_id')
     if not incident_id:
-        return jsonify({'error': 'Incident ID missing in session'}), 400
+        return jsonify({'error': 'Missing incident ID in session'}), 400
 
     data = request.get_json(silent=True) or {}
 
-    # Emulate GET progress if no data sent
+    # Se não vierem dados, só calcular progresso
     if not data:
-        return calcular_progresso(incident_id)
+        percent = compute_percent_complete(incident_id)
+        if percent is None:
+            return jsonify({'error': 'Progress calculation failed'}), 500
+        return jsonify({'status': 'ok', 'percent_complete': percent})
 
-    # Validate step_index
+    # Validar índice
     try:
         step_index = int(data.get('step'))
     except (TypeError, ValueError):
         return jsonify({'error': 'Invalid step index'}), 400
 
-    evidence = data.get('evidence', '').strip()
-    if not evidence:
+    evidence_text = data.get('evidence', '').strip()
+    if not evidence_text:
         return jsonify({'error': 'Empty evidence'}), 400
 
     checked_substeps = data.get('checked_substeps', [])
@@ -660,38 +723,58 @@ def save_step():
     attachment_name = data.get('attachment_name', '').strip()
 
     try:
-        # Use IncidentStep for step-specific data
-        step = IncidentStep.query.filter_by(incident_id=incident_id, step_index=step_index).first()
-        if not step:
-            step = IncidentStep(incident_id=incident_id, step_index=step_index)
-            db.session.add(step)
+        incident = IncidentStep.query.filter_by(incident_id=incident_id).first()
+        if not incident:
+            return jsonify({'error': 'Incident not found'}), 404
 
-        step.evidence = evidence
-        step.sub_steps = json.dumps(checked_substeps)
+        # Garantir que os campos têm conteúdo JSON válido
+        try:
+            evidence_dict = json.loads(incident.evidence) if incident.evidence and incident.evidence.strip() else {}
+        except Exception:
+            evidence_dict = {}
+
+        try:
+            substeps_dict = json.loads(incident.sub_steps) if incident.sub_steps and incident.sub_steps.strip() else {}
+        except Exception:
+            substeps_dict = {}
+
+        try:
+            attachments_dict = json.loads(incident.attachment_name) if incident.attachment_name and incident.attachment_name.strip() else {}
+        except Exception:
+            attachments_dict = {}
+
+        # Atualizar os dados no índice correspondente
+        evidence_dict[str(step_index)] = evidence_text
+        substeps_dict[str(step_index)] = checked_substeps
         if attachment_name:
-            step.attachment_name = attachment_name
+            attachments_dict[str(step_index)] = attachment_name
+
+        # Salvar de volta no objeto
+        incident.evidence = json.dumps(evidence_dict)
+        incident.sub_steps = json.dumps(substeps_dict)
+        incident.attachment_name = json.dumps(attachments_dict)
 
         db.session.commit()
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': 'Database error: ' + str(e)}), 500
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
 
-    # Call progress calculator
-    progress_response = calcular_progresso(incident_id)
+    # Recalcular e atualizar percent_complete
+    percent = compute_percent_complete(incident_id)
+    if percent is not None:
+        try:
+            incident.percent_complete = percent
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': f'Progress update failed: {str(e)}'}), 500
 
-    # Extract the Response object from tuple if needed
-    if isinstance(progress_response, tuple):
-        progress_response_obj = progress_response[0]
-    else:
-        progress_response_obj = progress_response
+    return jsonify(status="ok", percent=percent)
 
-    progress_data = progress_response_obj.get_json()
 
-    # Check for 'percent' key, else return error
-    if 'percent' not in progress_data:
-        return jsonify({'error': progress_data.get('error', 'Unknown error')}), 400
 
-    return jsonify(status="ok", percent=progress_data['percent'])
+
 
 
 
@@ -732,7 +815,7 @@ def save_completion():
 
     incident_id = session.get('id')
     if not incident_id:
-        return jsonify({'error': 'incident_id not found in session'}), 400
+        return incident_id == 1
 
     try:
         incident = db.session.get(Incident, incident_id)
@@ -776,7 +859,7 @@ def save_completion():
         'type': session.get('type', 'N/A'),
         'steps': session.get('steps', []),
         'sub_steps': session.get('sub_steps', {}),
-        'evidences': session.get('evidences', {}),
+        'evidence': session.get('evidence', {}),
         'attachments': session.get('report_data', {}).get('attachments', {})
     }
 
@@ -814,10 +897,12 @@ def upload_file():
     if not step_index or not step_index.isdigit():
         return jsonify({'status': 'error', 'message': 'Invalid step index'})
 
-    step_index = int(step_index)  # convert here!
+    step_index = int(step_index)
 
     filename = secure_filename(file.filename)
-    incident_id = session.get('id')
+
+    # CORRIGIDO AQUI
+    incident_id = session.get('incident_id')
     if not incident_id:
         return jsonify({'status': 'error', 'message': 'No incident in session'})
 
@@ -864,7 +949,7 @@ def finish_incident():
         return jsonify({'error': 'Not found or not authorized'}), 404
 
     # Guardar evidências e sub_steps da sessão no modelo
-    incident.evidences = json.dumps(session.get('evidences', {}))
+    incident.evidence = json.dumps(session.get('evidence', {}))
     incident.sub_steps = json.dumps(session.get('sub_steps', {}))
     incident.status = "Completed"
     incident.end_datetime = datetime.now()
@@ -873,7 +958,7 @@ def finish_incident():
 
     # Limpar sessão
     session.pop('id', None)
-    session.pop('evidences', None)
+    session.pop('evidence', None)
     session.pop('sub_steps', None)
     session.pop('steps', None)
     session.pop('class', None)
@@ -910,7 +995,7 @@ def download_report():
 
     steps_raw = data.get('steps', [])
     sub_steps = data.get('sub_steps', {})
-    evidences = data.get('evidences', {})
+    evidence = data.get('evidence', {})
 
     incident_id = session.get('incident_id')
     if not incident_id:
@@ -940,7 +1025,7 @@ def download_report():
         steps_structured.append({
             'step': step.get('step', f'Step {step_index}'),
             'substeps': sub_steps.get(step_index, []),
-            'evidences': evidences.get(step_index, []),
+            'evidence': evidence.get(step_index, []),
             'attachments': attachments.get(step_index, []),
         })
 
@@ -988,7 +1073,10 @@ def flatten_data(data):
     elif isinstance(data, list):
         return ' '.join(flatten_data(item) for item in data)
     else:
-        return str(data)
+        try:
+            return str(data)
+        except Exception:
+            return ''
 
 
 @app.route('/incident/<int:incident_id>/download', methods=['GET', 'HEAD'])
@@ -1041,6 +1129,10 @@ def converter_para_pdf_com_libreoffice(docx_path):
         libreoffice_path = r"C:\Program Files\LibreOffice\program\soffice.exe"
     elif os_name == "Darwin":
         libreoffice_path = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+    elif os_name == "Linux":
+        libreoffice_path = "libreoffice"
+    else:
+        raise EnvironmentError(f"Sistema operacional '{os_name}' não suportado.")
 
     if not os.path.exists(libreoffice_path):
         raise FileNotFoundError("LibreOffice não foi encontrado no caminho especificado.")
@@ -1065,6 +1157,9 @@ def search():
     steps_data = load_incident_steps()
 
     results = []
+
+    if not query or len(query.strip()) < 2:
+        return jsonify({'results': []})
 
     for incident in incidents:
         class_name = incident.get('class', '')
@@ -1101,6 +1196,17 @@ def search():
                             "type": type_name,
                             "substep": sub
                         })
+
+    unique_results = []
+    seen = set()
+
+    for r in results:
+        key = json.dumps(r, sort_keys=True)
+        if key not in seen:
+            seen.add(key)
+            unique_results.append(r)
+
+    return jsonify({'results': unique_results})
 
     return jsonify({'results': results})
 

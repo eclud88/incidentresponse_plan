@@ -5,10 +5,13 @@
 
 <h1 class="mb-2">D A S H B O A R D</h1>
 
+
+
 <div class="d-flex justify-content-end my-3">
   <a href="{{ url_for('incident') }}" class="btn btn-success">
-    ➕ New Record
-  </a>
+  <i class="bi bi-plus-circle me-1"></i> New Record
+</a>
+
 </div>
 
 {% if in_progress_incidents %}
@@ -27,27 +30,30 @@
       {% for incident in in_progress_incidents %}
       <tr>
         <td>{{ incident.id }}</td>
-        <td>{{ incident.class }} - {{ incident.type }}</td>
+        <td>{{ incident.incident_class }} - {{ incident.incident_type }}</td>
         <td>{{ incident.start_datetime.strftime('%d/%m/%Y') if incident.start_datetime else '—' }}</td>
         <td>
-          <div class="progress" style="height: 20px;">
-            <div class="progress-bar bg-info"
-                 role="progressbar"
-                 style="width: {{ incident.percent }}%;"
-                 aria-valuenow="{{ incident.percent }}"
-                 aria-valuemin="0" aria-valuemax="100">
-              {{ incident.percent }}%
-            </div>
-          </div>
+          <div class="d-flex align-items-center gap-2">
+  <div class="progress flex-grow-1" style="height: 20px;">
+    <div class="progress-bar bg-info"
+         role="progressbar"
+         style="width: {{ incident.percent_complete }}%;"
+         aria-valuenow="{{ incident.percent_complete }}"
+         aria-valuemin="0" aria-valuemax="100">
+    </div>
+  </div>
+  <span class="badge bg-info text-dark">{{ incident.percent_complete }}%</span>
+</div>
+
         </td>
         <td>
-          {% if incident.percent < 100.0 %}
-         <a href="{{ url_for('resume_incident', incident_id=incident.incident_id) }}"
+
+         <a href="{{ url_for('resume_incident', incident_id=incident.id) }}"
    class="btn btn-sm btn-outline-primary">
   ▶️ Resume
 </a>
 
-          {% endif %}
+
         </td>
       </tr>
       {% endfor %}
@@ -72,7 +78,7 @@
       {% for incident in completed_incidents %}
       <tr>
         <td>{{ incident.id }}</td>
-        <td>{{ incident.class }} - {{ incident.type }}</td>
+        <td>{{ incident.incident_class }} - {{ incident.incident_type }}</td>
         <td>{{ incident.start_datetime.strftime('%d/%m/%Y') if incident.start_datetime else '' }}</td>
         <td>{{ incident.end_datetime.strftime('%d/%m/%Y') if incident.end_datetime else '' }}</td>
         <td>
