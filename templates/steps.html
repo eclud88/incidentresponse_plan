@@ -179,7 +179,7 @@
         body: JSON.stringify({
             step: index,
             evidence: evidence,
-            checked_substeps: checkedSubsteps
+            sub_steps: checkedSubsteps
         })
     })
     .then(res => res.json())
@@ -196,7 +196,7 @@
         }
         setTimeout(() => feedback.textContent = '', 4000);
 
-        checkProgress(); // <--- ADICIONADO AQUI
+        checkProgress();
     })
     .catch(err => {
         console.error("Erro técnico ao gravar step:", err);
