@@ -381,51 +381,6 @@ def dashboard():
 
 
 
-@app.route('/incident/start', methods=['POST'])
-def start_incident():
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'No data sent'}), 400
-
-    incident_class = data.get('incident_class', '').strip()
-    incident_type = data.get('incident_type', '').strip()
-    steps = data.get('steps', [])
-
-    if not incident_class or not incident_type:
-        return jsonify({'error': 'Missing incident class or type'}), 400
-
-    try:
-        # Cria novo registo Incident com ID automático
-        new_incident = IncidentStep(
-            incident_class=incident_class,
-            incident_type=incident_type,
-            steps=json.dumps(steps),
-            start_datetime=datetime.utcnow(),
-            status="In Progress"
-        )
-        db.session.add(new_incident)
-        db.session.commit()
-
-        # Agora cria o primeiro passo
-        step = IncidentStep(
-            incident_id=new_incident.id,
-            step_index=1,
-            incident_class=incident_class,
-            incident_type=incident_type,
-            steps=json.dumps(steps),
-            percent_complete=0.0,
-            status="In Progress"
-        )
-        db.session.add(step)
-        db.session.commit()
-
-        return jsonify({'status': 'ok', 'incident_id': new_incident.id})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': f'Database error: {e}'}), 500
-
-
-
 @app.route('/incident', methods=['GET', 'POST'])
 def incident():
     if 'username' not in session:
@@ -445,8 +400,13 @@ def incident():
             })
 
             try:
+                # Busca o último incidente criado
+                last_step = IncidentStep.query.order_by(IncidentStep.id.desc()).first()
+                last_id = last_step.id if last_step else 0
+
                 # Cria novo Incident
                 new_incident = IncidentStep(
+                    incident_id=last_id + 1,
                     incident_class=selected_class,
                     incident_type=selected_type,
                     start_datetime=session['start'],
@@ -456,20 +416,6 @@ def incident():
                 db.session.commit()
 
                 session['incident_id'] = new_incident.id
-                if not new_incident.id:
-                    new_incident.id = 1
-
-                # Cria primeiro step
-                new_step = IncidentStep(
-                    incident_id=new_incident.id,
-                    step_index=1,
-                    incident_class=selected_class,
-                    incident_type=selected_type,
-                    start_datetime=session['start'],
-                    status="In Progress"
-                )
-                db.session.add(new_step)
-                db.session.commit()
 
                 return redirect(url_for(
                     'steps',
@@ -487,6 +433,7 @@ def incident():
         incidents=incidents,
         show_user_dropdown=True
     )
+
 
 @app.route('/incident/resume/<int:incident_id>')
 def resume_incident(incident_id):

@@ -24,8 +24,6 @@
   {% endif %}
 {% endfor %}
 
-
-
           </select>
           <div class="form-text">Choose first the incident class.</div>
         </div>
@@ -71,7 +69,7 @@
       return;
     }
 
-    const found = incidents.find(i => i.class === selectedClass);
+    const found = incidents.find(i => i['class'] === selectedClass);
     if (!found || !found.types || found.types.length === 0) {
       typeSelect.innerHTML = '<option value="">No types available</option>';
       updateSubmitButton();
