@@ -396,37 +396,10 @@ def incident():
             session.update({
                 'class': selected_class,
                 'type': selected_type,
-                'start': datetime.now()
+                'start': datetime.utcnow().isoformat()
             })
 
-            try:
-                # Busca o último incidente criado
-                last_step = IncidentStep.query.order_by(IncidentStep.id.desc()).first()
-                last_id = last_step.id if last_step else 0
-
-                # Cria novo Incident
-                new_incident = IncidentStep(
-                    incident_id=last_id + 1,
-                    incident_class=selected_class,
-                    incident_type=selected_type,
-                    start_datetime=session['start'],
-                    status="In Progress"
-                )
-                db.session.add(new_incident)
-                db.session.commit()
-
-                session['incident_id'] = new_incident.id
-
-                return redirect(url_for(
-                    'steps',
-                    start_datetime=session['start'],
-                    class_=selected_class,
-                    type_=selected_type
-                ))
-
-            except Exception as e:
-                db.session.rollback()
-                return jsonify({'status': 'error', 'message': str(e)}), 500
+            return redirect(url_for('steps'))
 
     return render_template(
         'incident.html',
@@ -541,25 +514,36 @@ def steps():
     session['total_steps'] = len(found_steps)
 
     incident_id = session.get('incident_id')
+
+    if incident_id:
+        existing_steps = IncidentStep.query.filter_by(incident_id=incident_id).first()
+        if not existing_steps:
+            incident_id = None
+
     if not incident_id:
         last = IncidentStep.query.order_by(IncidentStep.incident_id.desc()).first()
         next_id = (last.incident_id + 1) if last else 1
         now = datetime.utcnow()
 
+        incident_id = session.get('incident_id')
+
+        start_step_index = 1
+
         try:
-            for index, step in enumerate(found_steps):
-                new_step = IncidentStep(
-                    incident_id=next_id,
-                    step_index=index,
-                    incident_class=class_param,
-                    incident_type=type_param,
-                    steps=json.dumps(found_steps),
-                    start_datetime=now,
-                    status="In Progress"
-                )
-                db.session.add(new_step)
+            new_incident = IncidentStep(
+                incident_id=next_id,
+                step_index=start_step_index,
+                incident_class=class_param,
+                incident_type=type_param,
+                steps=json.dumps(found_steps),
+                start_datetime=now,
+                status="In Progress"
+            )
+            db.session.add(new_incident)
             db.session.commit()
 
+
+            # Atualiza sessão com os dados essenciais
             session.update({
                 'incident_id': next_id,
                 'start_datetime': now.isoformat(),
@@ -567,10 +551,13 @@ def steps():
                 'type': type_param
             })
             incident_id = next_id
+            session.modified = True
+
         except Exception as e:
             db.session.rollback()
             abort(500, description=f"Erro ao criar IncidentStep: {str(e)}")
 
+    # ✅ Carrega os steps existentes
     step_rows = IncidentStep.query.filter_by(incident_id=incident_id).all()
     if not step_rows:
         abort(500, description="Falha ao carregar os steps do incidente.")
@@ -758,7 +745,6 @@ def save_completion():
 
             return IncidentStep.progress_percentage(incident_step)
 
-        # ✅ Atualiza percentagem considerando lessons e steps
         percent = update_incident_progress(incident_id, improvements, observations)
         incident.percent_complete = percent
 
